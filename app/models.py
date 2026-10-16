@@ -249,4 +249,5 @@ class VaultRecord(BaseModel):
     preview_mp4_url: Optional[str] = None
     master_mp4_url: Optional[str] = None
     storyboard_urls: Dict[str, str] = Field(default_factory=dict)
+    omni_clip_urls: Dict[str, str] = Field(default_factory=dict)
     postcard_image_url: Optional[str] = None

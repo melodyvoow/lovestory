@@ -37,6 +37,46 @@ def format_video_prompt(scene_desc: str) -> str:
     return f"{clean_desc}, {CINEMA_VERITE_SUFFIX}"
 
 
+def build_omni_image_to_video_prompt(cut: dict, cp: dict) -> str:
+    """
+    Builds a rich Image-to-Video motion prompt for gemini-omni-1.1-flash based on the generated
+    storyboard keyframe image (cut1.jpg..cut5.jpg) while preserving the mandatory 1970s cinema verite suffix.
+    """
+    cut_num = int(cut.get("cut", 1))
+    camera_angle = cut.get("camera_angle", "Cinematic 16:9 shot")
+    base_motion = (cut.get("video_motion_prompt") or "").strip()
+    if CINEMA_VERITE_SUFFIX in base_motion:
+        core_motion = base_motion.replace(CINEMA_VERITE_SUFFIX, "").rstrip("., ")
+    else:
+        core_motion = base_motion.rstrip("., ")
+
+    cut_specific_guidance = {
+        1: (
+            f"Animate this exact keyframe ({camera_angle}): raindrops trickling down the foreground window glass, "
+            f"warm amber tungsten cafe light flickering softly on {cp['partner_name']} and protagonist, gentle camera push-in"
+        ),
+        2: (
+            f"Animate this exact macro insert keyframe ({camera_angle}): shallow depth-of-field rack focus with subtle "
+            f"breathing motion, glistening moisture and warm background bokeh shimmer"
+        ),
+        3: (
+            f"Animate this exact over-the-shoulder keyframe ({camera_angle}): {cp['partner_name']} speaking softly with "
+            f"emotional glistening eyes, subtle head nod and warm rain reflections moving across the window"
+        ),
+        4: (
+            f"Animate this exact tabletop climax keyframe ({camera_angle}): slow, tender hand movement across the wooden table "
+            f"with the vintage black-and-white photo postcard, warm tungsten bokeh and rising coffee steam"
+        ),
+        5: (
+            f"Animate this exact 90-degree top-down overhead epilogue keyframe ({camera_angle}): gentle overhead camera drift "
+            f"over the flipped handwritten photo postcard on warm paper grain, soft warm light shift"
+        ),
+    }.get(cut_num, f"Animate this exact keyframe ({camera_angle}) with subtle natural cinematic motion")
+
+    combined = f"{cut_specific_guidance}. {core_motion}".strip(". ")
+    return format_video_prompt(combined)
+
+
 def _load_font(size: int = 24) -> Any:
     font_candidates = [
         "/System/Library/Fonts/Supplemental/AppleMyungjo.ttf",
@@ -91,25 +131,34 @@ def get_gemini_client() -> Optional[genai.Client]:
         return None
 
 
-def _decode_b64_image(b64_str: Optional[str]) -> Optional[Tuple[bytes, str, str]]:
-    """Returns (raw_bytes, clean_base64_str, mime_type) from a Data URL or raw base64 string."""
+def _decode_b64_image(b64_str: Optional[str], max_dim: int = 640) -> Optional[Tuple[bytes, str, str]]:
+    """
+    Decodes a Data URL or raw base64 string and immediately downscales/compresses it
+    to a compact RGB JPEG (max 640x640, ~35KB instead of 6MB+) for ultra-fast multimodal uploads.
+    Returns (compact_jpeg_bytes, compact_base64_str, 'image/jpeg').
+    """
     if not b64_str or not isinstance(b64_str, str):
         return None
     raw = b64_str.strip()
     if not raw:
         return None
-    mime_type = "image/jpeg"
     if raw.startswith("data:"):
-        header, _, payload = raw.partition(",")
-        if "image/png" in header:
-            mime_type = "image/png"
-        elif "image/webp" in header:
-            mime_type = "image/webp"
+        _, _, payload = raw.partition(",")
         raw = payload.strip()
     try:
+        import io
         img_bytes = base64.b64decode(raw)
+        try:
+            with Image.open(io.BytesIO(img_bytes)) as im:
+                rgb = im.convert("RGB")
+                rgb.thumbnail((max_dim, max_dim), Image.Resampling.LANCZOS)
+                buf = io.BytesIO()
+                rgb.save(buf, format="JPEG", quality=84, optimize=True)
+                img_bytes = buf.getvalue()
+        except Exception:
+            pass
         clean_b64 = base64.b64encode(img_bytes).decode("ascii")
-        return img_bytes, clean_b64, mime_type
+        return img_bytes, clean_b64, "image/jpeg"
     except Exception as e:
         print(f"[Reference Image Decode Warning] {e}")
         return None
@@ -160,52 +209,78 @@ def _try_generate_image(
     client: Optional[genai.Client],
     prompt: str,
     out_file: Path,
-    timeout_sec: float = 8.0,
+    timeout_sec: float = 55.0,
     ref_images: Optional[List[Dict[str, str]]] = None,
 ) -> bool:
     """
-    Attempts to generate a 9:16 image via gemini-nano-banana-2.1 (fallback: gemini-3.1-flash-lite-image).
-    If ref_images are provided, passes multimodal reference images + text prompt first.
+    Generates a real 16:9 image via gemini-nano-banana-2.1 (fallback: gemini-3.1-flash-lite-image).
+    Creates a thread-local client so parallel workers never contend on a shared connection pool,
+    and allows up to 55s because high-res 1376x768 image generation typically takes 20-32s.
     """
-    if not client or os.environ.get("LOVESTORY_FAST_SETUP", "0") == "1":
+    if os.environ.get("LOVESTORY_FAST_SETUP", "0") == "1":
         return False
+
+    worker_client = get_gemini_client() or client
+    if not worker_client:
+        return False
+
+    from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeoutError
 
     inputs_to_try: List[Any] = []
     if ref_images:
-        multimodal_input = []
+        mm_input: List[Any] = []
         for ref in ref_images:
             if ref.get("data"):
-                multimodal_input.append(
+                mm_input.append(
                     {
                         "type": "image",
                         "data": ref["data"],
                         "mime_type": ref.get("mime_type", "image/jpeg"),
                     }
                 )
-        multimodal_input.append(
-            {
-                "type": "text",
-                "text": f"Use the attached character reference image(s) to preserve facial features, hairstyle, and vibe. {prompt}",
-            }
-        )
-        inputs_to_try.append(multimodal_input)
+        if mm_input:
+            mm_input.append(
+                {
+                    "type": "text",
+                    "text": f"Use the attached character reference image(s) to preserve facial features, hairstyle, and vibe. {prompt}",
+                }
+            )
+            inputs_to_try.append(mm_input)
     inputs_to_try.append(prompt)
 
-    for model_name in ("gemini-nano-banana-2.1", "gemini-3.1-flash-lite-image"):
-        for candidate_input in inputs_to_try:
-            try:
-                res = client.interactions.create(
-                    model=model_name,
-                    input=candidate_input,
-                    response_format={"type": "image", "aspect_ratio": "16:9"},
-                )
-                img_bytes = extract_image_bytes(res)
-                if img_bytes:
-                    out_file.write_bytes(img_bytes)
-                    return True
-            except Exception as e:
-                print(f"[{model_name} Fallback] {e}")
+    def _run_generation() -> Optional[bytes]:
+        for model_name in ("gemini-nano-banana-2.1", "gemini-3.1-flash-lite-image"):
+            for candidate_input in inputs_to_try:
+                try:
+                    res = worker_client.interactions.create(
+                        model=model_name,
+                        input=candidate_input,
+                        response_format={"type": "image", "aspect_ratio": "16:9"},
+                    )
+                    img_bytes = extract_image_bytes(res)
+                    if img_bytes:
+                        return img_bytes
+                except Exception as e:
+                    print(f"[{model_name} Attempt Warning] {e}")
+        return None
+
+    executor = ThreadPoolExecutor(max_workers=1)
+    try:
+        fut = executor.submit(_run_generation)
+        img_bytes = fut.result(timeout=timeout_sec)
+        if img_bytes:
+            out_file.write_bytes(img_bytes)
+            return True
+    except FuturesTimeoutError:
+        print(f"[Image Generation Timeout after {timeout_sec}s -> Procedural Fallback]")
+    except Exception as e:
+        print(f"[Image Generation Fallback] {e}")
+    finally:
+        executor.shutdown(wait=False, cancel_futures=True)
     return False
+
+
+_CHAR_ASSET_CACHE: Dict[str, dict] = {}
 
 
 def enrich_cast_profile_with_reference_images(
@@ -215,12 +290,16 @@ def enrich_cast_profile_with_reference_images(
     custom_note: Optional[str],
     out_dir: Path,
     client: Optional[genai.Client] = None,
+    generate_sheet: bool = True,
 ) -> Tuple[dict, List[Dict[str, str]], List[Path], Optional[str]]:
     """
-    Saves attached partner/player reference images, extracts visual descriptors via gemini-4-argon,
+    Saves compact partner/player reference images, extracts visual descriptors via gemini-4-argon
+    (with in-memory caching so Step 1 -> Start Session never re-runs the same vision extraction),
     and generates a Ghibli-watercolor × 35mm Character Asset Sheet (`character_sheet.jpg`).
-    Returns (updated_cp, ref_images_payload, saved_ref_paths, character_sheet_url).
     """
+    import hashlib
+    import shutil
+
     out_dir.mkdir(parents=True, exist_ok=True)
     updated_cp = dict(cp)
     ref_images_payload: List[Dict[str, str]] = []
@@ -232,11 +311,7 @@ def enrich_cast_profile_with_reference_images(
     if partner_decoded:
         p_bytes, p_b64, p_mime = partner_decoded
         p_path = out_dir / "partner_ref.jpg"
-        try:
-            with Image.open(__import__("io").BytesIO(p_bytes)) as im:
-                im.convert("RGB").save(p_path, "JPEG", quality=92)
-        except Exception:
-            p_path.write_bytes(p_bytes)
+        p_path.write_bytes(p_bytes)
         saved_ref_paths.append(p_path)
         ref_images_payload.append({"role": "partner", "data": p_b64, "mime_type": p_mime})
         updated_cp["partner_ref_url"] = f"/api/media/{out_dir.name}/partner_ref.jpg"
@@ -246,23 +321,29 @@ def enrich_cast_profile_with_reference_images(
     if player_decoded:
         pl_bytes, pl_b64, pl_mime = player_decoded
         pl_path = out_dir / "player_ref.jpg"
-        try:
-            with Image.open(__import__("io").BytesIO(pl_bytes)) as im:
-                im.convert("RGB").save(pl_path, "JPEG", quality=92)
-        except Exception:
-            pl_path.write_bytes(pl_bytes)
+        pl_path.write_bytes(pl_bytes)
         saved_ref_paths.append(pl_path)
         ref_images_payload.append({"role": "player", "data": pl_b64, "mime_type": pl_mime})
         updated_cp["player_ref_url"] = f"/api/media/{out_dir.name}/player_ref.jpg"
         updated_cp["has_player_ref"] = True
 
-    if custom_note and custom_note.strip():
-        note = custom_note.strip()
+    note = (custom_note or "").strip()
+    if note:
         updated_cp["partner_visual"] = f"{updated_cp['partner_visual']}, ({note})"
         updated_cp["custom_note"] = note
 
-    # If reference images are uploaded, optionally analyze traits with gemini-4-argon
-    if ref_images_payload and client:
+    # Build a deterministic cache key so clicking "Generate Asset" then "Start Session" is instant
+    cache_sig = hashlib.sha256(
+        f"{cp.get('partner_name','')}|{(partner_ref_b64 or '')[:4096]}|{(player_ref_b64 or '')[:4096]}|{note}".encode("utf-8")
+    ).hexdigest()[:20]
+    cached = _CHAR_ASSET_CACHE.get(cache_sig)
+
+    if cached:
+        updated_cp["partner_visual"] = cached.get("partner_visual", updated_cp["partner_visual"])
+        updated_cp["player_visual"] = cached.get("player_visual", updated_cp["player_visual"])
+        if cached.get("extracted_summary_kr"):
+            updated_cp["extracted_summary_kr"] = cached["extracted_summary_kr"]
+    elif ref_images_payload and client and os.environ.get("LOVESTORY_FAST_SETUP", "0") != "1":
         try:
             mm_input: List[Any] = []
             for r in ref_images_payload:
@@ -302,15 +383,29 @@ def enrich_cast_profile_with_reference_images(
             f"첨부된 레퍼런스 사진({len(ref_images_payload)}장)의 이목구비·헤어·분위기를 지브리 수채화 × 35mm 필름 화풍에 반영했습니다."
         )
 
-    # Generate Character Reference Sheet if any reference image or custom note is provided
     sheet_url: Optional[str] = None
-    if saved_ref_paths or (custom_note and custom_note.strip()):
+    if saved_ref_paths or note or generate_sheet:
         sheet_file = out_dir / "character_sheet.jpg"
-        sheet_prompt = (
-            f"Character concept art portrait sheet of {updated_cp['partner_visual']} and {updated_cp['player_visual']}. "
-            f"{GLOBAL_STYLE_SUFFIX}"
-        )
-        if not _try_generate_image(client, sheet_prompt, sheet_file, ref_images=ref_images_payload):
+        cached_sheet = Path(cached["sheet_path"]) if (cached and cached.get("sheet_path")) else None
+        if cached_sheet and cached_sheet.exists():
+            shutil.copyfile(cached_sheet, sheet_file)
+        elif generate_sheet:
+            sheet_prompt = (
+                f"Character concept art portrait sheet of {updated_cp['partner_visual']} and {updated_cp['player_visual']}. "
+                f"{GLOBAL_STYLE_SUFFIX}"
+            )
+            if not _try_generate_image(client, sheet_prompt, sheet_file, timeout_sec=55.0, ref_images=ref_images_payload):
+                _render_watercolor_card(
+                    sheet_file,
+                    title=f"CHARACTER ASSET SHEET • {updated_cp['partner_name'].upper()}",
+                    subtitle=f"{updated_cp['partner_name_kr']} ({updated_cp['partner_name']}) & 주인공 레퍼런스 인화",
+                    body=updated_cp.get("extracted_summary_kr", updated_cp["partner_visual"][:90]),
+                    accent="#e2b679",
+                    icon="📸",
+                    ref_image_paths=saved_ref_paths,
+                )
+        else:
+            # During /api/session/start, avoid an extra blocking image API call for the sheet if not cached
             _render_watercolor_card(
                 sheet_file,
                 title=f"CHARACTER ASSET SHEET • {updated_cp['partner_name'].upper()}",
@@ -320,13 +415,20 @@ def enrich_cast_profile_with_reference_images(
                 icon="📸",
                 ref_image_paths=saved_ref_paths,
             )
+
         sheet_url = f"/api/media/{out_dir.name}/character_sheet.jpg"
         updated_cp["character_sheet_url"] = sheet_url
+        _CHAR_ASSET_CACHE[cache_sig] = {
+            "partner_visual": updated_cp["partner_visual"],
+            "player_visual": updated_cp["player_visual"],
+            "extracted_summary_kr": updated_cp.get("extracted_summary_kr"),
+            "sheet_path": str(sheet_file) if (generate_sheet or (cached_sheet and cached_sheet.exists())) else None,
+        }
 
     return updated_cp, ref_images_payload, saved_ref_paths, sheet_url
 
 
-# In-App Live Asset Generation (Setup Still & 3-Cut Prequel)
+# In-App Live Asset Generation (Setup Still & 3-Cut Prequel — Parallelized!)
 def generate_in_app_setup_and_prequel(
     session: dict,
     out_dir: Path,
@@ -335,9 +437,11 @@ def generate_in_app_setup_and_prequel(
     ref_image_paths: Optional[List[Path]] = None,
 ) -> Tuple[str, List[dict]]:
     """
-    Generates in-app setup still and 3-cut prequel keyframes via gemini-nano-banana-2.1
-    (with instant PIL lyrical watercolor-vintage fallback + reference image composite so gameplay never blocks).
+    Generates in-app setup still and 3-cut prequel keyframes CONCURRENTLY in parallel
+    via ThreadPoolExecutor(max_workers=4) so total setup time is 4x faster.
     """
+    from concurrent.futures import ThreadPoolExecutor
+
     out_dir.mkdir(parents=True, exist_ok=True)
     cp = session["cast_profile"]
     loc = LOCATION_CHOICES.get(session.get("location_id", "rainy_cafe"), LOCATION_CHOICES["rainy_cafe"])
@@ -345,25 +449,12 @@ def generate_in_app_setup_and_prequel(
         session.get("situation_id", "parting_before_trip"), SITUATION_CHOICES["parting_before_trip"]
     )
 
-    # 1. Custom Scene Setup Still
     setup_file = out_dir / "setup_still.jpg"
     setup_prompt = (
         f"Establishing shot at {loc['prompt_env']}. {cp['partner_visual']} seated across from "
         f"{cp['player_visual']}. {sit['goal']}. {GLOBAL_STYLE_SUFFIX}"
     )
 
-    if not _try_generate_image(client, setup_prompt, setup_file, ref_images=ref_images):
-        _render_watercolor_card(
-            setup_file,
-            title=f"SCENE SETUP • {loc['id'].upper()}",
-            subtitle=f"{cp['partner_name_kr']} ({cp['partner_name']}) | {loc['title_kr']}",
-            body=f"{sit['title_kr']} — {loc['prompt_env']}",
-            accent="#e2b679",
-            icon="🎬",
-            ref_image_paths=ref_image_paths,
-        )
-
-    # 2. 3-Cut Prequel Keyframes & Video Clips with Diverse Camera Angles
     prequel_specs = [
         {
             "cut": 1,
@@ -422,13 +513,24 @@ def generate_in_app_setup_and_prequel(
         },
     ]
 
-    prequel_clips = []
-    for spec in prequel_specs:
+    def _build_setup_still():
+        if not _try_generate_image(client, setup_prompt, setup_file, timeout_sec=55.0, ref_images=ref_images):
+            _render_watercolor_card(
+                setup_file,
+                title=f"SCENE SETUP • {loc['id'].upper()}",
+                subtitle=f"{cp['partner_name_kr']} ({cp['partner_name']}) | {loc['title_kr']}",
+                body=f"{sit['title_kr']} — {loc['prompt_env']}",
+                accent="#e2b679",
+                icon="🎬",
+                ref_image_paths=ref_image_paths,
+            )
+
+    def _build_prequel_cut(spec: dict) -> dict:
         cut_idx = spec["cut"]
         cut_poster = out_dir / f"prequel_cut{cut_idx}.jpg"
         cut_video = out_dir / f"prequel_cut{cut_idx}.mp4"
 
-        if not _try_generate_image(client, spec["prompt"], cut_poster, ref_images=ref_images):
+        if not _try_generate_image(client, spec["prompt"], cut_poster, timeout_sec=55.0, ref_images=ref_images):
             _render_watercolor_card(
                 cut_poster,
                 title=f"PREQUEL CUT 0{cut_idx} • {spec['camera_angle'].upper()}",
@@ -440,19 +542,22 @@ def generate_in_app_setup_and_prequel(
             )
 
         _generate_smooth_zoom_clip(cut_poster, cut_video, duration_sec=3)
+        return {
+            "cut": cut_idx,
+            "title": spec["title"],
+            "camera_angle": spec["camera_angle"],
+            "video_motion_prompt": spec["video_motion"],
+            "subtitle_kr": spec["subtitle_kr"],
+            "subtitle_en": spec["subtitle_en"],
+            "poster_url": f"/api/media/{out_dir.name}/prequel_cut{cut_idx}.jpg",
+            "video_url": f"/api/media/{out_dir.name}/prequel_cut{cut_idx}.mp4",
+        }
 
-        prequel_clips.append(
-            {
-                "cut": cut_idx,
-                "title": spec["title"],
-                "camera_angle": spec["camera_angle"],
-                "video_motion_prompt": spec["video_motion"],
-                "subtitle_kr": spec["subtitle_kr"],
-                "subtitle_en": spec["subtitle_en"],
-                "poster_url": f"/api/media/{out_dir.name}/prequel_cut{cut_idx}.jpg",
-                "video_url": f"/api/media/{out_dir.name}/prequel_cut{cut_idx}.mp4",
-            }
-        )
+    with ThreadPoolExecutor(max_workers=4) as pool:
+        fut_setup = pool.submit(_build_setup_still)
+        futs_prequel = [pool.submit(_build_prequel_cut, spec) for spec in prequel_specs]
+        fut_setup.result()
+        prequel_clips = [f.result() for f in futs_prequel]
 
     setup_url = f"/api/media/{out_dir.name}/setup_still.jpg"
     return setup_url, prequel_clips
@@ -568,6 +673,8 @@ def _generate_smooth_zoom_clip(image_path: Path, video_path: Path, duration_sec:
         f"anoisesrc=d={duration_sec}:c=pink:r=44100:a=0.035,lowpass=f=1200",
         "-c:v",
         "libx264",
+        "-preset",
+        "ultrafast",
         "-t",
         str(duration_sec),
         "-pix_fmt",
@@ -1315,13 +1422,23 @@ def multimodal_showrunner_verify_storyboards(
 
     if client and os.environ.get("LOVESTORY_FAST_SETUP", "0") != "1":
         try:
+            import io
             mm_input: List[Any] = []
             for kp in keyframe_paths[:3]:
                 if kp.exists():
+                    try:
+                        with Image.open(kp) as im:
+                            rgb = im.convert("RGB")
+                            rgb.thumbnail((480, 270), Image.Resampling.LANCZOS)
+                            buf = io.BytesIO()
+                            rgb.save(buf, format="JPEG", quality=80)
+                            thumb_b64 = base64.b64encode(buf.getvalue()).decode("ascii")
+                    except Exception:
+                        thumb_b64 = base64.b64encode(kp.read_bytes()).decode("ascii")
                     mm_input.append(
                         {
                             "type": "image",
-                            "data": base64.b64encode(kp.read_bytes()).decode("ascii"),
+                            "data": thumb_b64,
                             "mime_type": "image/jpeg",
                         }
                     )

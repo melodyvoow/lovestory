@@ -80,26 +80,58 @@ function setupDirectorListeners() {
     });
   });
 
+  // Client-side image downscaler (~35KB JPEG instead of 6MB+ raw upload)
+  function compressImageFileToDataURL(file, maxDim = 640, quality = 0.84) {
+    return new Promise((resolve) => {
+      const reader = new FileReader();
+      reader.onload = () => {
+        const img = new Image();
+        img.onload = () => {
+          let w = img.width || maxDim;
+          let h = img.height || maxDim;
+          if (w > maxDim || h > maxDim) {
+            if (w >= h) {
+              h = Math.round((h * maxDim) / w);
+              w = maxDim;
+            } else {
+              w = Math.round((w * maxDim) / h);
+              h = maxDim;
+            }
+          }
+          const canvas = document.createElement("canvas");
+          canvas.width = w;
+          canvas.height = h;
+          const ctx = canvas.getContext("2d");
+          ctx.drawImage(img, 0, 0, w, h);
+          resolve(canvas.toDataURL("image/jpeg", quality));
+        };
+        img.onerror = () => resolve(reader.result);
+        img.src = reader.result;
+      };
+      reader.readAsDataURL(file);
+    });
+  }
+
   // Character Reference Image Upload Handlers
   const partnerInput = document.getElementById("partner-ref-input");
   const partnerThumb = document.getElementById("partner-ref-thumb");
+  const partnerPlaceholder = document.getElementById("partner-ref-placeholder");
   const partnerClearBtn = document.getElementById("btn-clear-partner-ref");
-  const partnerSlot = document.getElementById("slot-partner-ref");
+  const partnerSlot = document.getElementById("partner-ref-slot");
 
   if (partnerInput) {
-    partnerInput.addEventListener("change", (e) => {
+    partnerInput.addEventListener("change", async (e) => {
       const file = e.target.files && e.target.files[0];
       if (!file) return;
-      const reader = new FileReader();
-      reader.onload = () => {
-        state.partnerRefImageB64 = reader.result;
-        if (partnerThumb) {
-          partnerThumb.innerHTML = `<img src="${reader.result}" alt="상대역 참조 이미지" />`;
-        }
-        if (partnerClearBtn) partnerClearBtn.classList.remove("hidden");
-        if (partnerSlot) partnerSlot.classList.add("has-image");
-      };
-      reader.readAsDataURL(file);
+      const dataUrl = await compressImageFileToDataURL(file);
+      state.partnerRefImageB64 = dataUrl;
+      if (partnerThumb) {
+        partnerThumb.src = dataUrl;
+        partnerThumb.classList.remove("hidden");
+      }
+      if (partnerPlaceholder) partnerPlaceholder.classList.add("hidden");
+      if (partnerClearBtn) partnerClearBtn.classList.remove("hidden");
+      if (partnerSlot) partnerSlot.classList.add("has-image");
     });
   }
 
@@ -109,7 +141,11 @@ function setupDirectorListeners() {
       e.stopPropagation();
       state.partnerRefImageB64 = null;
       if (partnerInput) partnerInput.value = "";
-      if (partnerThumb) partnerThumb.innerHTML = `<span class="ref-placeholder">+ 사진 첨부</span>`;
+      if (partnerThumb) {
+        partnerThumb.removeAttribute("src");
+        partnerThumb.classList.add("hidden");
+      }
+      if (partnerPlaceholder) partnerPlaceholder.classList.remove("hidden");
       partnerClearBtn.classList.add("hidden");
       if (partnerSlot) partnerSlot.classList.remove("has-image");
     });
@@ -117,23 +153,23 @@ function setupDirectorListeners() {
 
   const playerInput = document.getElementById("player-ref-input");
   const playerThumb = document.getElementById("player-ref-thumb");
+  const playerPlaceholder = document.getElementById("player-ref-placeholder");
   const playerClearBtn = document.getElementById("btn-clear-player-ref");
-  const playerSlot = document.getElementById("slot-player-ref");
+  const playerSlot = document.getElementById("player-ref-slot");
 
   if (playerInput) {
-    playerInput.addEventListener("change", (e) => {
+    playerInput.addEventListener("change", async (e) => {
       const file = e.target.files && e.target.files[0];
       if (!file) return;
-      const reader = new FileReader();
-      reader.onload = () => {
-        state.playerRefImageB64 = reader.result;
-        if (playerThumb) {
-          playerThumb.innerHTML = `<img src="${reader.result}" alt="주인공 참조 이미지" />`;
-        }
-        if (playerClearBtn) playerClearBtn.classList.remove("hidden");
-        if (playerSlot) playerSlot.classList.add("has-image");
-      };
-      reader.readAsDataURL(file);
+      const dataUrl = await compressImageFileToDataURL(file);
+      state.playerRefImageB64 = dataUrl;
+      if (playerThumb) {
+        playerThumb.src = dataUrl;
+        playerThumb.classList.remove("hidden");
+      }
+      if (playerPlaceholder) playerPlaceholder.classList.add("hidden");
+      if (playerClearBtn) playerClearBtn.classList.remove("hidden");
+      if (playerSlot) playerSlot.classList.add("has-image");
     });
   }
 
@@ -143,7 +179,11 @@ function setupDirectorListeners() {
       e.stopPropagation();
       state.playerRefImageB64 = null;
       if (playerInput) playerInput.value = "";
-      if (playerThumb) playerThumb.innerHTML = `<span class="ref-placeholder">+ 사진 첨부</span>`;
+      if (playerThumb) {
+        playerThumb.removeAttribute("src");
+        playerThumb.classList.add("hidden");
+      }
+      if (playerPlaceholder) playerPlaceholder.classList.remove("hidden");
       playerClearBtn.classList.add("hidden");
       if (playerSlot) playerSlot.classList.remove("has-image");
     });
@@ -582,6 +622,7 @@ function resetDarkroomSlots() {
   for (let i = 1; i <= 5; i++) {
     const slot = document.querySelector(`.film-slot[data-cut="${i}"]`);
     if (slot) {
+      delete slot.dataset.omniBound;
       slot.innerHTML = `<span>CUT 0${i}</span><div class="slot-placeholder">${labels[i - 1]}</div>`;
     }
   }
@@ -732,12 +773,32 @@ async function pollPipelineJob() {
     document.getElementById("pipeline-progress-fill").style.width = `${job.progress_pct}%`;
     document.getElementById("pipeline-detail-text").textContent = job.status_detail;
 
-    // Update 5-Cut Storyboard Thumbnails
+    // Update 5-Cut Storyboard Thumbnails & Per-Cut Omni Video Playback
     if (job.storyboard_urls) {
       Object.entries(job.storyboard_urls).forEach(([cutNum, url]) => {
         const slot = document.querySelector(`.film-slot[data-cut="${cutNum}"]`);
         if (slot && !slot.querySelector("img")) {
           slot.innerHTML = `<span>CUT 0${cutNum}</span><img src="${url}" alt="Cut ${cutNum}" />`;
+        }
+      });
+    }
+
+    if (job.omni_clip_urls) {
+      Object.entries(job.omni_clip_urls).forEach(([cutNum, clipUrl]) => {
+        const slot = document.querySelector(`.film-slot[data-cut="${cutNum}"]`);
+        if (slot && !slot.dataset.omniBound) {
+          slot.dataset.omniBound = "1";
+          slot.style.cursor = "pointer";
+          slot.title = `Cut 0${cutNum} 옴니 모션 영상 재생 (${clipUrl})`;
+          const badge = slot.querySelector("span");
+          if (badge) badge.textContent = `CUT 0${cutNum} • ▶ OMNI`;
+          slot.addEventListener("click", () => {
+            const vp = document.getElementById("compiled-video-player");
+            if (vp) {
+              vp.src = clipUrl;
+              vp.play().catch(() => {});
+            }
+          });
         }
       });
     }

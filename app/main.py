@@ -158,6 +158,7 @@ def start_session(req: StartSessionRequest):
         custom_note=req.custom_note,
         out_dir=session_out_dir,
         client=client,
+        generate_sheet=False,
     )
 
     session_stub = {
@@ -350,6 +351,7 @@ async def process_turn(req: TurnRequest, bg_tasks: BackgroundTasks):
         "progress_pct": 10,
         "status_detail": "gemini-4-argon 5-Cut 시네마 베리테 기획 및 자율 연속성 검증 루프 시작...",
         "storyboard_urls": {},
+        "omni_clip_urls": {},
         "preview_mp4_url": None,
         "master_mp4_url": None,
         "verification_log": [],

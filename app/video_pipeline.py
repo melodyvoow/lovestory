@@ -22,8 +22,10 @@ from .gemini_service import (
     _load_font,
     _safe_draw_text,
     _try_generate_image,
+    build_omni_image_to_video_prompt,
     extract_image_bytes,
     format_video_prompt,
+    get_active_api_key,
     get_gemini_client,
     multimodal_showrunner_verify_storyboards,
     plan_and_verify_five_cuts,
@@ -81,6 +83,7 @@ def save_to_film_vault(jobs_base_dir: Path, job_id: str, snapshot: dict, job: di
         "preview_mp4_url": job.get("preview_mp4_url"),
         "master_mp4_url": job.get("master_mp4_url"),
         "storyboard_urls": job.get("storyboard_urls", {}),
+        "omni_clip_urls": job.get("omni_clip_urls", {}),
         "postcard_image_url": job.get("storyboard_urls", {}).get("5") or f"/api/media/{job_id}/cut5.jpg",
     }
 
@@ -261,6 +264,8 @@ def render_storyboard_card_procedural(
 
 
 async def run_progressive_5cut_pipeline(job_id: str, snapshot: dict, jobs_store: dict, jobs_base_dir: Path):
+    from concurrent.futures import ThreadPoolExecutor
+
     job = jobs_store[job_id]
     job_dir = jobs_base_dir / job_id
     job_dir.mkdir(parents=True, exist_ok=True)
@@ -289,189 +294,304 @@ async def run_progressive_5cut_pipeline(job_id: str, snapshot: dict, jobs_store:
     job["progress_pct"] = 15
     job["status_detail"] = "gemini-4-argon 5-Cut 다채로운 앵글 기획 & 5대 규칙 자율 검증 루프 실행 중..."
 
-    plan, verif_log = plan_and_verify_five_cuts(snapshot, client=client)
+    plan, verif_log = await asyncio.to_thread(plan_and_verify_five_cuts, snapshot, client)
     job["verification_log"] = verif_log
     job["five_cut_plan"] = plan
-    job["progress_pct"] = 25
+    job["progress_pct"] = 30
 
-    # Step 2: 5-Cut Storyboard Keyframes (gemini-nano-banana-2.1, 16:9 widescreen)
+    # Step 2: 5-Cut Storyboard Keyframes in PARALLEL (gemini-nano-banana-2.1, 16:9 widescreen)
     job["status"] = "storyboarding"
-    job["progress_pct"] = 35
-    job["status_detail"] = "gemini-nano-banana-2.1 지브리풍 수채화 16:9 5-Cut 스토리보드 인화 중..."
+    job["progress_pct"] = 38
+    job["status_detail"] = "gemini-nano-banana-2.1 지브리풍 수채화 16:9 5-Cut 스토리보드 병렬 인화 중..."
 
-    keyframe_paths: List[Path] = []
-    for cut in plan["cuts"]:
+    def _render_single_cut(cut: dict) -> Tuple[int, Path]:
         cut_num = cut["cut"]
         img_path = job_dir / f"cut{cut_num}.jpg"
-
         if cut_num == 5:
             render_cut5_postcard_back(img_path, res, cp, width=1280, height=720)
         else:
             rendered = _try_generate_image(
-                client, cut["image_prompt"], img_path, ref_images=ref_payloads if ref_payloads else None
+                client,
+                cut["image_prompt"],
+                img_path,
+                timeout_sec=55.0,
+                ref_images=ref_payloads if ref_payloads else None,
             )
             if not rendered:
                 render_storyboard_card_procedural(img_path, cut, cp, ref_image_paths=ref_paths)
-
-        keyframe_paths.append(img_path)
         job["storyboard_urls"][str(cut_num)] = f"/api/media/{job_id}/cut{cut_num}.jpg"
-        job["progress_pct"] = 35 + cut_num * 5
-        await asyncio.sleep(0.25)
+        job["progress_pct"] = min(62, job.get("progress_pct", 38) + 5)
+        return cut_num, img_path
 
-    # Step 2.5: Multimodal Showrunner Verification Experience (Post-Ending 3-Point Checklist)
-    job["status_detail"] = "🎬 Argon 쇼러너 멀티모달 연속성 검수 중 (Cast / Clue / Postcard P.S.)..."
-    job["showrunner_checklist"] = multimodal_showrunner_verify_storyboards(
-        snapshot, plan, keyframe_paths, client=client
-    )
-    job["progress_pct"] = 66
+    def _render_all_storyboards() -> List[Path]:
+        with ThreadPoolExecutor(max_workers=5) as pool:
+            futs = [pool.submit(_render_single_cut, cut) for cut in plan["cuts"]]
+            results = [f.result() for f in futs]
+        results.sort(key=lambda x: x[0])
+        return [p for _, p in results]
 
-    # Step 3: Progressive Instant preview.mp4 compilation via local FFmpeg (16:9 1280x720)
+    keyframe_paths = await asyncio.to_thread(_render_all_storyboards)
+    job["progress_pct"] = 64
+
+    # Step 3: Progressive Instant preview.mp4 compilation FIRST so video is immediately playable!
     job["status"] = "storyboarding"
-    job["status_detail"] = "로컬 FFmpeg로 즉시 감상 가능한 16:9 preview.mp4 컴파일 중..."
+    job["status_detail"] = "로컬 FFmpeg로 즉시 감상 가능한 16:9 preview.mp4 고속 컴파일 중..."
     preview_mp4_path = job_dir / "preview.mp4"
 
-    cut_clip_paths: List[Path] = []
-    for idx, (cut, kf) in enumerate(zip(plan["cuts"], keyframe_paths)):
-        dur = int(cut.get("duration_sec", 4))
-        clip_path = job_dir / f"clip_preview_{idx+1}.mp4"
-        cmd = [
+    def _compile_preview_mp4() -> List[Path]:
+        def _encode_one(idx_cut_kf: Tuple[int, dict, Path]) -> Tuple[int, Path]:
+            idx, cut, kf = idx_cut_kf
+            dur = int(cut.get("duration_sec", 4))
+            clip_path = job_dir / f"clip_preview_{idx+1}.mp4"
+            cmd = [
+                "ffmpeg",
+                "-y",
+                "-loop",
+                "1",
+                "-i",
+                str(kf),
+                "-f",
+                "lavfi",
+                "-i",
+                f"anoisesrc=d={dur}:c=pink:r=48000:a=0.035,lowpass=f=1200,aformat=channel_layouts=stereo",
+                "-c:v",
+                "libx264",
+                "-preset",
+                "ultrafast",
+                "-r",
+                "24",
+                "-t",
+                str(dur),
+                "-pix_fmt",
+                "yuv420p",
+                "-vf",
+                f"scale=1280:720,zoompan=z='min(zoom+0.0012,1.06)':d={dur*24}:fps=24:x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':s=1280x720",
+                "-c:a",
+                "aac",
+                "-ar",
+                "48000",
+                "-ac",
+                "2",
+                "-b:a",
+                "128k",
+                "-shortest",
+                str(clip_path),
+            ]
+            subprocess.run(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            return idx, clip_path
+
+        with ThreadPoolExecutor(max_workers=5) as pool:
+            items = [(idx, cut, kf) for idx, (cut, kf) in enumerate(zip(plan["cuts"], keyframe_paths))]
+            encoded = [f.result() for f in [pool.submit(_encode_one, it) for it in items]]
+        encoded.sort(key=lambda x: x[0])
+        paths = [p for _, p in encoded]
+
+        concat_list_file = job_dir / "preview_concat.txt"
+        with open(concat_list_file, "w", encoding="utf-8") as f:
+            for p in paths:
+                f.write(f"file '{p.name}'\n")
+
+        cmd_concat = [
             "ffmpeg",
             "-y",
-            "-loop",
-            "1",
-            "-i",
-            str(kf),
             "-f",
-            "lavfi",
+            "concat",
+            "-safe",
+            "0",
             "-i",
-            f"anoisesrc=d={dur}:c=pink:r=44100:a=0.035,lowpass=f=1200",
-            "-c:v",
-            "libx264",
-            "-t",
-            str(dur),
-            "-pix_fmt",
-            "yuv420p",
-            "-vf",
-            f"scale=1280:720,zoompan=z='min(zoom+0.0012,1.06)':d={dur*25}:x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':s=1280x720",
-            "-c:a",
-            "aac",
-            "-b:a",
-            "128k",
-            "-shortest",
-            str(clip_path),
+            str(concat_list_file),
+            "-c",
+            "copy",
+            str(preview_mp4_path),
         ]
-        subprocess.run(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        cut_clip_paths.append(clip_path)
+        subprocess.run(cmd_concat, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        return paths
 
-    concat_list_file = job_dir / "preview_concat.txt"
-    with open(concat_list_file, "w", encoding="utf-8") as f:
-        for p in cut_clip_paths:
-            f.write(f"file '{p.name}'\n")
-
-    cmd_concat = [
-        "ffmpeg",
-        "-y",
-        "-f",
-        "concat",
-        "-safe",
-        "0",
-        "-i",
-        str(concat_list_file),
-        "-c",
-        "copy",
-        str(preview_mp4_path),
-    ]
-    subprocess.run(cmd_concat, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    cut_clip_paths = await asyncio.to_thread(_compile_preview_mp4)
 
     if preview_mp4_path.exists():
         job["preview_mp4_url"] = f"/api/media/{job_id}/preview.mp4"
         save_to_film_vault(jobs_base_dir, job_id, snapshot, job)
 
-    job["progress_pct"] = 70
+    job["progress_pct"] = 74
 
-    # Step 4: Video Clips with gemini-omni-1.1-flash (16:9 widescreen, 1970s cinema verite formula)
+    # Step 3.5: Multimodal Showrunner Verification Experience (Post-Ending 3-Point Checklist)
+    job["status_detail"] = "🎬 Argon 쇼러너 멀티모달 연속성 검수 중 (Cast / Clue / Postcard P.S.)..."
+    job["showrunner_checklist"] = await asyncio.to_thread(
+        multimodal_showrunner_verify_storyboards, snapshot, plan, keyframe_paths, client
+    )
+    job["progress_pct"] = 80
+
+    # Step 4: Video Clips with gemini-omni-1.1-flash for ALL 5 CUTS based on generated 5-cut images (Image-to-Video, Parallel!)
     job["status"] = "rendering_clips"
-    job["status_detail"] = "gemini-omni-1.1-flash 16:9 1970s 시네마 베리테 모션 클립 합성 중..."
+    job.setdefault("omni_clip_urls", {})
+    job["status_detail"] = "gemini-omni-1.1-flash 5개 컷 이미지 기반(Image-to-Video) 16:9 모션 클립 5종 병렬 생성 중..."
 
-    master_clips: List[Path] = []
-    for idx, cut in enumerate(plan["cuts"]):
+    def _extract_omni_video_bytes(interaction: object, api_key: str) -> Optional[bytes]:
+        if hasattr(interaction, "output_video") and interaction.output_video:
+            ov = interaction.output_video
+            if getattr(ov, "data", None):
+                return base64.b64decode(ov.data) if isinstance(ov.data, str) else ov.data
+            if getattr(ov, "uri", None):
+                uri = ov.uri
+                sep = "&" if "?" in uri else "?"
+                r = httpx.get(f"{uri}{sep}key={api_key}", timeout=60.0)
+                if r.is_success:
+                    return r.content
+
+        for step in getattr(interaction, "steps", None) or []:
+            for item in getattr(step, "content", None) or []:
+                if getattr(item, "type", None) == "video":
+                    if getattr(item, "data", None):
+                        d = item.data
+                        return base64.b64decode(d) if isinstance(d, str) else d
+                    if getattr(item, "uri", None):
+                        uri = item.uri
+                        sep = "&" if "?" in uri else "?"
+                        r = httpx.get(f"{uri}{sep}key={api_key}", timeout=60.0)
+                        if r.is_success:
+                            return r.content
+        return None
+
+    def _render_omni_clip(idx_cut: Tuple[int, dict]) -> Tuple[int, Path]:
+        idx, cut = idx_cut
         cut_num = cut["cut"]
+        kf_path = keyframe_paths[idx] if idx < len(keyframe_paths) else (job_dir / f"cut{cut_num}.jpg")
         final_cut_clip = job_dir / f"omni_cut{cut_num}.mp4"
         clip_rendered = False
 
-        # Prioritize Cut 4 Climax and Cut 3 Dialogue via gemini-omni-1.1-flash
-        if client and cut_num in (3, 4) and os.environ.get("LOVESTORY_FAST_SETUP", "0") != "1":
-            try:
-                motion_prompt = format_video_prompt(cut.get("video_motion_prompt", ""))
-                interaction = client.interactions.create(
-                    model="gemini-omni-1.1-flash",
-                    input=motion_prompt,
-                    response_format={
-                        "type": "video",
-                        "aspect_ratio": "16:9",
-                        "resolution": "720p",
-                    },
-                    background=True,
-                )
-                inter_id = getattr(interaction, "id", None)
-                for _ in range(8):
-                    status = getattr(interaction, "status", "completed")
-                    if status in ("completed", "COMPLETED", "failed", "FAILED"):
+        worker_client = get_gemini_client() or client
+        api_key = get_active_api_key()
+
+        if worker_client and os.environ.get("LOVESTORY_FAST_SETUP", "0") != "1":
+            motion_prompt = build_omni_image_to_video_prompt(cut, cp)
+            cut["video_motion_prompt_enriched"] = motion_prompt
+
+            inputs_to_try: List[object] = []
+            if kf_path and kf_path.exists():
+                try:
+                    kf_b64 = base64.b64encode(kf_path.read_bytes()).decode("ascii")
+                    inputs_to_try.append(
+                        [
+                            {"type": "image", "data": kf_b64, "mime_type": "image/jpeg"},
+                            {"type": "text", "text": motion_prompt},
+                        ]
+                    )
+                except Exception as e:
+                    print(f"[Omni Cut {cut_num} Keyframe Read Warning] {e}")
+            inputs_to_try.append(motion_prompt)
+
+            for candidate_input in inputs_to_try:
+                try:
+                    interaction = worker_client.interactions.create(
+                        model="gemini-omni-1.1-flash",
+                        input=candidate_input,
+                        response_format={
+                            "type": "video",
+                            "aspect_ratio": "16:9",
+                            "resolution": "720p",
+                        },
+                        background=True,
+                    )
+                    inter_id = getattr(interaction, "id", None)
+                    for _ in range(36):
+                        status = getattr(interaction, "status", "completed")
+                        if status in ("completed", "COMPLETED", "failed", "FAILED"):
+                            break
+                        time.sleep(4)
+                        if inter_id:
+                            interaction = worker_client.interactions.get(id=inter_id)
+
+                    final_status = getattr(interaction, "status", "unknown")
+                    if final_status in ("failed", "FAILED"):
+                        continue
+
+                    video_bytes = _extract_omni_video_bytes(interaction, api_key)
+                    if video_bytes and len(video_bytes) > 1000:
+                        final_cut_clip.write_bytes(video_bytes)
+                        clip_rendered = True
                         break
-                    await asyncio.sleep(5)
-                    interaction = client.interactions.get(id=inter_id)
-
-                video_bytes = None
-                if hasattr(interaction, "output_video") and interaction.output_video:
-                    ov = interaction.output_video
-                    if getattr(ov, "data", None):
-                        video_bytes = base64.b64decode(ov.data) if isinstance(ov.data, str) else ov.data
-                    elif getattr(ov, "uri", None):
-                        uri = ov.uri
-                        sep = "&" if "?" in uri else "?"
-                        api_key = os.environ.get("GEMINI_API_KEY", "").strip()
-                        r = httpx.get(f"{uri}{sep}key={api_key}", timeout=60.0)
-                        if r.is_success:
-                            video_bytes = r.content
-
-                if video_bytes:
-                    final_cut_clip.write_bytes(video_bytes)
-                    clip_rendered = True
-            except Exception as e:
-                print(f"[Omni Cut {cut_num} Fallback] {e}")
+                except Exception as e:
+                    print(f"[Omni Cut {cut_num} Attempt Warning] {e}")
 
         if not clip_rendered or not final_cut_clip.exists():
             shutil.copyfile(cut_clip_paths[idx], final_cut_clip)
 
-        master_clips.append(final_cut_clip)
-        job["progress_pct"] = 70 + cut_num * 5
-        await asyncio.sleep(0.25)
+        job["omni_clip_urls"][str(cut_num)] = f"/api/media/{job_id}/omni_cut{cut_num}.mp4"
+        done_count = len(job["omni_clip_urls"])
+        job["progress_pct"] = min(94, 80 + done_count * 3)
+        job["status_detail"] = (
+            f"gemini-omni-1.1-flash 5-Cut 모션 영상 생성 중 ({done_count}/5 완료 • Cut 0{cut_num} 인화됨)..."
+        )
+        return idx, final_cut_clip
+
+    def _build_all_master_clips() -> List[Path]:
+        with ThreadPoolExecutor(max_workers=5) as pool:
+            items = list(enumerate(plan["cuts"]))
+            res_list = [f.result() for f in [pool.submit(_render_omni_clip, it) for it in items]]
+        res_list.sort(key=lambda x: x[0])
+        return [p for _, p in res_list]
+
+    master_clips = await asyncio.to_thread(_build_all_master_clips)
+    job["progress_pct"] = 95
 
     # Step 5: Final Master MP4 Concat via FFmpeg
     job["status"] = "concatenating"
-    job["progress_pct"] = 95
     job["status_detail"] = "최종 5-Cut 마스터 숏드라마 MP4 스티칭 및 내 필름 보관함 저장 중..."
 
-    master_concat_list = job_dir / "master_concat.txt"
-    with open(master_concat_list, "w", encoding="utf-8") as f:
-        for p in master_clips:
-            f.write(f"file '{p.name}'\n")
+    def _concat_master():
+        master_concat_list = job_dir / "master_concat.txt"
+        with open(master_concat_list, "w", encoding="utf-8") as f:
+            for p in master_clips:
+                f.write(f"file '{p.name}'\n")
 
-    master_mp4_path = job_dir / "master.mp4"
-    cmd_master = [
-        "ffmpeg",
-        "-y",
-        "-f",
-        "concat",
-        "-safe",
-        "0",
-        "-i",
-        str(master_concat_list),
-        "-c",
-        "copy",
-        str(master_mp4_path),
-    ]
-    subprocess.run(cmd_master, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        master_mp4_path = job_dir / "master.mp4"
+        cmd_master = [
+            "ffmpeg",
+            "-y",
+            "-f",
+            "concat",
+            "-safe",
+            "0",
+            "-i",
+            str(master_concat_list),
+            "-c:v",
+            "libx264",
+            "-preset",
+            "ultrafast",
+            "-r",
+            "24",
+            "-pix_fmt",
+            "yuv420p",
+            "-c:a",
+            "aac",
+            "-ar",
+            "48000",
+            "-ac",
+            "2",
+            "-b:a",
+            "128k",
+            str(master_mp4_path),
+        ]
+        res_proc = subprocess.run(cmd_master, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        if res_proc.returncode != 0 or not master_mp4_path.exists():
+            cmd_copy = [
+                "ffmpeg",
+                "-y",
+                "-f",
+                "concat",
+                "-safe",
+                "0",
+                "-i",
+                str(master_concat_list),
+                "-c",
+                "copy",
+                str(master_mp4_path),
+            ]
+            subprocess.run(cmd_copy, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        return master_mp4_path
+
+    master_mp4_path = await asyncio.to_thread(_concat_master)
 
     if master_mp4_path.exists():
         job["master_mp4_url"] = f"/api/media/{job_id}/master.mp4"
@@ -479,4 +599,5 @@ async def run_progressive_5cut_pipeline(job_id: str, snapshot: dict, jobs_store:
 
     job["status"] = "completed"
     job["progress_pct"] = 100
-    job["status_detail"] = "1970s 시네마 베리테 마스터 숏드라마 완성 및 필름 보관함 아카이빙 완료!"
+    job["status_detail"] = "1970s 시네마 베리테 5-Cut 옴니 마스터 숏드라마 완성 및 필름 보관함 아카이빙 완료!"
+
