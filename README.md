@@ -5,6 +5,7 @@
 ---
 
 ## 🌐 Google Cloud Deployment & Links
+- **Live Hosted App (Google Cloud Run):** [https://lovestory-168116031339.asia-northeast3.run.app/](https://lovestory-168116031339.asia-northeast3.run.app/)
 - **Google Cloud Project ID:** `h2gdm-hack26icn-2725`
 - **Google Cloud Run Console:** [https://console.cloud.google.com/run?project=h2gdm-hack26icn-2725](https://console.cloud.google.com/run?project=h2gdm-hack26icn-2725)
 - **Google Cloud Dashboard:** [https://console.cloud.google.com/home/dashboard?project=h2gdm-hack26icn-2725](https://console.cloud.google.com/home/dashboard?project=h2gdm-hack26icn-2725)
