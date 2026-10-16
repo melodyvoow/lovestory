@@ -5,9 +5,11 @@ Autonomous Verification Loop with Self-Correction, and In-App Asset Generation.
 """
 
 import base64
+import io
 import json
 import os
 import subprocess
+import threading
 import time
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
@@ -209,13 +211,13 @@ def _try_generate_image(
     client: Optional[genai.Client],
     prompt: str,
     out_file: Path,
-    timeout_sec: float = 55.0,
+    timeout_sec: float = 34.0,
     ref_images: Optional[List[Dict[str, str]]] = None,
 ) -> bool:
     """
     Generates a real 16:9 image via gemini-nano-banana-2.1 (fallback: gemini-3.1-flash-lite-image).
-    Creates a thread-local client so parallel workers never contend on a shared connection pool,
-    and allows up to 55s because high-res 1376x768 image generation typically takes 20-32s.
+    Uses a non-blocking daemon thread so timeouts return immediately without stalling worker pools,
+    and normalizes the output image to 1280x720 RGB JPEG (16:9 widescreen) for fast browser & Omni video use.
     """
     if os.environ.get("LOVESTORY_FAST_SETUP", "0") == "1":
         return False
@@ -224,7 +226,8 @@ def _try_generate_image(
     if not worker_client:
         return False
 
-    from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeoutError
+    import io
+    import threading
 
     inputs_to_try: List[Any] = []
     if ref_images:
@@ -248,7 +251,9 @@ def _try_generate_image(
             inputs_to_try.append(mm_input)
     inputs_to_try.append(prompt)
 
-    def _run_generation() -> Optional[bytes]:
+    result_box: Dict[str, Optional[bytes]] = {"bytes": None}
+
+    def _run_generation():
         for model_name in ("gemini-nano-banana-2.1", "gemini-3.1-flash-lite-image"):
             for candidate_input in inputs_to_try:
                 try:
@@ -259,24 +264,30 @@ def _try_generate_image(
                     )
                     img_bytes = extract_image_bytes(res)
                     if img_bytes:
-                        return img_bytes
+                        result_box["bytes"] = img_bytes
+                        return
                 except Exception as e:
                     print(f"[{model_name} Attempt Warning] {e}")
-        return None
 
-    executor = ThreadPoolExecutor(max_workers=1)
-    try:
-        fut = executor.submit(_run_generation)
-        img_bytes = fut.result(timeout=timeout_sec)
-        if img_bytes:
+    worker_thread = threading.Thread(target=_run_generation, daemon=True)
+    worker_thread.start()
+    worker_thread.join(timeout=timeout_sec)
+
+    img_bytes = result_box.get("bytes")
+    if img_bytes:
+        try:
+            with Image.open(io.BytesIO(img_bytes)) as im:
+                rgb = im.convert("RGB")
+                if rgb.size != (1280, 720):
+                    rgb = rgb.resize((1280, 720), Image.Resampling.LANCZOS)
+                rgb.save(out_file, format="JPEG", quality=88, optimize=True)
+            return True
+        except Exception:
             out_file.write_bytes(img_bytes)
             return True
-    except FuturesTimeoutError:
+
+    if worker_thread.is_alive():
         print(f"[Image Generation Timeout after {timeout_sec}s -> Procedural Fallback]")
-    except Exception as e:
-        print(f"[Image Generation Fallback] {e}")
-    finally:
-        executor.shutdown(wait=False, cancel_futures=True)
     return False
 
 
@@ -1087,7 +1098,9 @@ def _build_canonical_five_cut_plan(snapshot: dict) -> dict:
                 "title": "Establishing Through-Glass Two-Shot",
                 "camera_angle": "Exterior Through-Glass Wide/Medium Two-Shot",
                 "duration_sec": 4,
-                "subtitle_kr": snapshot["dialogue_history"][0].get("text_kr", ""),
+                "subtitle_kr": (snapshot.get("dialogue_history") or [{}])[0].get(
+                    "text_kr", "비 많이 오네… 오늘은 조금 일찍 가봐야 할 것 같아."
+                ),
                 "image_prompt": (
                     f"Exterior Through-Glass Wide/Medium Two-Shot: Establishing two-shot at {loc['prompt_env']} with rain and mist "
                     f"in foreground bokeh. {cp['partner_visual']} seated across from {cp['player_visual']}. {GLOBAL_STYLE_SUFFIX}"
@@ -1172,7 +1185,7 @@ def plan_and_verify_five_cuts(
     canonical_plan = _build_canonical_five_cut_plan(snapshot)
     plan = canonical_plan
 
-    # Initial synthesis via gemini-4-argon (thinking_level="high") if client is configured
+    # Initial synthesis via gemini-4-argon (thinking_level="high") if client is configured (hard 14s cap)
     if client:
         synth_prompt = f"""
 You are the 5-Cut Continuity Planner (`gemini-4-argon`, `thinking_level="high"`) for LoveStory;.
@@ -1198,19 +1211,30 @@ STRICT RULES:
    - Cut 5: "90° Top-Down Bird's-Eye Overhead Epilogue"
 6. Every `video_motion_prompt` MUST end with: "{CINEMA_VERITE_SUFFIX}"
 """
-        try:
-            res_plan = client.interactions.create(
-                model="gemini-4-argon",
-                input=synth_prompt,
-                generation_config={"thinking_level": "high"},
-            )
-            raw_plan = clean_json_text(extract_text_from_interaction(res_plan))
-            parsed_plan = json.loads(raw_plan)
-            if isinstance(parsed_plan, dict) and isinstance(parsed_plan.get("cuts"), list):
-                plan = parsed_plan
-        except Exception as e:
-            print(f"[Argon 5-Cut Planner Fallback to Canonical] {e}")
-            plan = canonical_plan
+        plan_box: Dict[str, Any] = {"plan": None}
+
+        def _synth_worker():
+            try:
+                w_client = get_gemini_client() or client
+                if not w_client:
+                    return
+                res_plan = w_client.interactions.create(
+                    model="gemini-4-argon",
+                    input=synth_prompt,
+                    generation_config={"thinking_level": "high"},
+                )
+                raw_plan = clean_json_text(extract_text_from_interaction(res_plan))
+                parsed_plan = json.loads(raw_plan)
+                if isinstance(parsed_plan, dict) and isinstance(parsed_plan.get("cuts"), list):
+                    plan_box["plan"] = parsed_plan
+            except Exception as e:
+                print(f"[Argon 5-Cut Planner Fallback to Canonical] {e}")
+
+        t_synth = threading.Thread(target=_synth_worker, daemon=True)
+        t_synth.start()
+        t_synth.join(timeout=14.0)
+        if plan_box["plan"] is not None:
+            plan = plan_box["plan"]
 
     verification_log = []
     # Autonomous Verification & Self-Correction Loop (up to 2 retries)
@@ -1233,8 +1257,8 @@ STRICT RULES:
         # Self-correct with gemini-4-argon (thinking_level="high") or deterministic repair
         repaired = False
         if client and attempt <= 2:
-            try:
-                fix_prompt = f"""
+            fix_box: Dict[str, Any] = {"plan": None}
+            fix_prompt = f"""
 You are the Autonomous Continuity Validator (`gemini-4-argon`, `thinking_level="high"`).
 Fix the following validation errors in the 5-Cut Continuity Plan:
 Errors: {json.dumps(errors, ensure_ascii=False)}
@@ -1250,18 +1274,30 @@ Ensure all 5 checks pass:
 5. cinema_verite_and_angles_valid: 5 distinct camera_angles and all video_motion_prompts ending with "{CINEMA_VERITE_SUFFIX}"
 Output ONLY valid JSON.
 """
-                res_fix = client.interactions.create(
-                    model="gemini-4-argon",
-                    input=fix_prompt,
-                    generation_config={"thinking_level": "high"},
-                )
-                fixed_raw = clean_json_text(extract_text_from_interaction(res_fix))
-                fixed_plan = json.loads(fixed_raw)
-                if isinstance(fixed_plan, dict) and isinstance(fixed_plan.get("cuts"), list):
-                    plan = fixed_plan
-                    repaired = True
-            except Exception as e:
-                print(f"[Verification Self-Correction Warning] {e}")
+
+            def _fix_worker():
+                try:
+                    w_client = get_gemini_client() or client
+                    if not w_client:
+                        return
+                    res_fix = w_client.interactions.create(
+                        model="gemini-4-argon",
+                        input=fix_prompt,
+                        generation_config={"thinking_level": "high"},
+                    )
+                    fixed_raw = clean_json_text(extract_text_from_interaction(res_fix))
+                    fixed_plan = json.loads(fixed_raw)
+                    if isinstance(fixed_plan, dict) and isinstance(fixed_plan.get("cuts"), list):
+                        fix_box["plan"] = fixed_plan
+                except Exception as e:
+                    print(f"[Verification Self-Correction Warning] {e}")
+
+            t_fix = threading.Thread(target=_fix_worker, daemon=True)
+            t_fix.start()
+            t_fix.join(timeout=10.0)
+            if fix_box["plan"] is not None:
+                plan = fix_box["plan"]
+                repaired = True
 
         if not repaired:
             plan = canonical_plan
@@ -1421,61 +1457,71 @@ def multimodal_showrunner_verify_storyboards(
     }
 
     if client and os.environ.get("LOVESTORY_FAST_SETUP", "0") != "1":
-        try:
-            import io
-            mm_input: List[Any] = []
-            for kp in keyframe_paths[:3]:
-                if kp.exists():
-                    try:
-                        with Image.open(kp) as im:
-                            rgb = im.convert("RGB")
-                            rgb.thumbnail((480, 270), Image.Resampling.LANCZOS)
-                            buf = io.BytesIO()
-                            rgb.save(buf, format="JPEG", quality=80)
-                            thumb_b64 = base64.b64encode(buf.getvalue()).decode("ascii")
-                    except Exception:
-                        thumb_b64 = base64.b64encode(kp.read_bytes()).decode("ascii")
-                    mm_input.append(
-                        {
-                            "type": "image",
-                            "data": thumb_b64,
-                            "mime_type": "image/jpeg",
-                        }
-                    )
-            mm_input.append(
-                {
-                    "type": "text",
-                    "text": (
-                        "You are the AI Showrunner Continuity Verifier (`gemini-4-argon`, `thinking_level='high'`). "
-                        "Inspect the attached storyboard keyframes and the 5-Cut Continuity Plan against the locked play_log_snapshot.\n"
-                        f"- Partner Cast: {cp['partner_visual']}\n"
-                        f"- Observed Clues: {json.dumps(observed)}\n"
-                        f"- Ending Type: {res.get('ending_type')}\n"
-                        f"- Postcard P.S.: {ps_note}\n"
-                        "Return ONLY valid JSON with: "
-                        '{"continuity_score": 98, "cast_detail_kr": "한 줄 검수평", '
-                        '"clue_detail_kr": "한 줄 검수평", "ps_detail_kr": "한 줄 검수평", "auto_patch_note_kr": "패치/검수 요약"}'
-                    ),
-                }
-            )
-            r = client.interactions.create(
-                model="gemini-4-argon",
-                input=mm_input,
-                generation_config={"thinking_level": "high"},
-            )
-            parsed = json.loads(clean_json_text(extract_text_from_interaction(r)))
-            if isinstance(parsed, dict):
-                fallback_checklist["continuity_score"] = int(parsed.get("continuity_score", 98))
-                if parsed.get("cast_detail_kr"):
-                    fallback_checklist["items"][0]["detail_kr"] = parsed["cast_detail_kr"]
-                if parsed.get("clue_detail_kr"):
-                    fallback_checklist["items"][1]["detail_kr"] = parsed["clue_detail_kr"]
-                if parsed.get("ps_detail_kr"):
-                    fallback_checklist["items"][2]["detail_kr"] = parsed["ps_detail_kr"]
-                if parsed.get("auto_patch_note_kr"):
-                    fallback_checklist["auto_patch_note_kr"] = parsed["auto_patch_note_kr"]
-        except Exception as e:
-            print(f"[Showrunner Multimodal Verify Fallback] {e}")
+        import io
+        import threading
+
+        def _verify_worker():
+            try:
+                worker_client = get_gemini_client() or client
+                if not worker_client:
+                    return
+                mm_input: List[Any] = []
+                for kp in keyframe_paths[:3]:
+                    if kp.exists():
+                        try:
+                            with Image.open(kp) as im:
+                                rgb = im.convert("RGB")
+                                rgb.thumbnail((420, 236), Image.Resampling.LANCZOS)
+                                buf = io.BytesIO()
+                                rgb.save(buf, format="JPEG", quality=78)
+                                thumb_b64 = base64.b64encode(buf.getvalue()).decode("ascii")
+                        except Exception:
+                            thumb_b64 = base64.b64encode(kp.read_bytes()).decode("ascii")
+                        mm_input.append(
+                            {
+                                "type": "image",
+                                "data": thumb_b64,
+                                "mime_type": "image/jpeg",
+                            }
+                        )
+                mm_input.append(
+                    {
+                        "type": "text",
+                        "text": (
+                            "You are the AI Showrunner Continuity Verifier (`gemini-4-argon`, `thinking_level='high'`). "
+                            "Inspect the attached storyboard keyframes and the 5-Cut Continuity Plan against the locked play_log_snapshot.\n"
+                            f"- Partner Cast: {cp['partner_visual']}\n"
+                            f"- Observed Clues: {json.dumps(observed)}\n"
+                            f"- Ending Type: {res.get('ending_type')}\n"
+                            f"- Postcard P.S.: {ps_note}\n"
+                            "Return ONLY valid JSON with: "
+                            '{"continuity_score": 98, "cast_detail_kr": "한 줄 검수평", '
+                            '"clue_detail_kr": "한 줄 검수평", "ps_detail_kr": "한 줄 검수평", "auto_patch_note_kr": "패치/검수 요약"}'
+                        ),
+                    }
+                )
+                r = worker_client.interactions.create(
+                    model="gemini-4-argon",
+                    input=mm_input,
+                    generation_config={"thinking_level": "high"},
+                )
+                parsed = json.loads(clean_json_text(extract_text_from_interaction(r)))
+                if isinstance(parsed, dict):
+                    fallback_checklist["continuity_score"] = int(parsed.get("continuity_score", 98))
+                    if parsed.get("cast_detail_kr"):
+                        fallback_checklist["items"][0]["detail_kr"] = parsed["cast_detail_kr"]
+                    if parsed.get("clue_detail_kr"):
+                        fallback_checklist["items"][1]["detail_kr"] = parsed["clue_detail_kr"]
+                    if parsed.get("ps_detail_kr"):
+                        fallback_checklist["items"][2]["detail_kr"] = parsed["ps_detail_kr"]
+                    if parsed.get("auto_patch_note_kr"):
+                        fallback_checklist["auto_patch_note_kr"] = parsed["auto_patch_note_kr"]
+            except Exception as e:
+                print(f"[Showrunner Multimodal Verify Fallback] {e}")
+
+        t = threading.Thread(target=_verify_worker, daemon=True)
+        t.start()
+        t.join(timeout=12.0)
 
     return fallback_checklist
 

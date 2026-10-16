@@ -13,7 +13,7 @@ from typing import Dict
 from dotenv import load_dotenv
 from fastapi import BackgroundTasks, FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, Response
 from fastapi.staticfiles import StaticFiles
 
 from .gemini_service import (
@@ -370,21 +370,70 @@ async def process_turn(req: TurnRequest, bg_tasks: BackgroundTasks):
     }
 
 
+@app.get("/favicon.ico", include_in_schema=False)
+def serve_favicon():
+    return Response(status_code=204)
+
+
 @app.get("/api/jobs/{job_id}")
 def get_job_status(job_id: str):
     job = jobs.get(job_id)
     if not job:
+        # Also check if snapshot.json exists on disk in case server reloaded
+        snap_file = JOBS_BASE_DIR / job_id / "snapshot.json"
+        if snap_file.exists():
+            job_dir = JOBS_BASE_DIR / job_id
+            sb_urls = {
+                str(i): f"/api/media/{job_id}/cut{i}.jpg"
+                for i in range(1, 6)
+                if (job_dir / f"cut{i}.jpg").exists()
+            }
+            omni_urls = {
+                str(i): f"/api/media/{job_id}/omni_cut{i}.mp4"
+                for i in range(1, 6)
+                if (job_dir / f"omni_cut{i}.mp4").exists()
+            }
+            return {
+                "job_id": job_id,
+                "status": "completed" if (job_dir / "master.mp4").exists() else "storyboarding",
+                "progress_pct": 100 if (job_dir / "master.mp4").exists() else 65,
+                "status_detail": "필름 인화 완료",
+                "storyboard_urls": sb_urls,
+                "omni_clip_urls": omni_urls,
+                "preview_mp4_url": f"/api/media/{job_id}/preview.mp4" if (job_dir / "preview.mp4").exists() else None,
+                "master_mp4_url": f"/api/media/{job_id}/master.mp4" if (job_dir / "master.mp4").exists() else None,
+                "verification_log": [],
+                "showrunner_checklist": None,
+            }
         raise HTTPException(status_code=404, detail="작업을 찾을 수 없습니다.")
     return job
 
 
 @app.get("/api/media/{job_id}/{filename}")
 def serve_job_media(job_id: str, filename: str):
-    file_path = JOBS_BASE_DIR / job_id / filename
-    if not file_path.exists():
-        raise HTTPException(status_code=404, detail="미디어 파일을 찾을 수 없습니다.")
-    media_type = "video/mp4" if filename.endswith(".mp4") else "image/jpeg"
-    return FileResponse(file_path, media_type=media_type)
+    candidates = [
+        JOBS_BASE_DIR / job_id / filename,
+        BASE_DIR / "outputs" / "jobs" / job_id / filename,
+    ]
+    for file_path in candidates:
+        if file_path.exists() and file_path.stat().st_size > 0:
+            media_type = "video/mp4" if filename.endswith(".mp4") else "image/jpeg"
+            return FileResponse(file_path, media_type=media_type)
+
+    # If a JPEG is requested for a vault item whose temp dir was cleared, render a clean placeholder card on the fly
+    if filename.endswith(".jpg"):
+        target_dir = JOBS_BASE_DIR / job_id
+        target_dir.mkdir(parents=True, exist_ok=True)
+        fallback_jpg = target_dir / filename
+        from PIL import Image, ImageDraw
+        img = Image.new("RGB", (1280, 720), (22, 18, 28))
+        draw = ImageDraw.Draw(img)
+        draw.rectangle([28, 28, 1252, 692], outline=(216, 178, 118), width=2)
+        draw.text((64, 60), f"LoveStory; Film Frame ({filename})", fill=(235, 222, 200))
+        img.save(fallback_jpg, "JPEG", quality=88)
+        return FileResponse(fallback_jpg, media_type="image/jpeg")
+
+    raise HTTPException(status_code=404, detail="미디어 파일을 찾을 수 없습니다.")
 
 
 # "MY FILM VAULT (🎞️ 내 필름 보관함)" Archive Endpoints

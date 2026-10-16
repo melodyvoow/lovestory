@@ -534,10 +534,17 @@ if (btnSynthesizeClues) {
       const syn = data.synthesis;
       state.clueSynthesis = syn;
 
-      document.getElementById("synthesis-title").textContent = `🔓 ${syn.deduction_title_kr}`;
-      document.getElementById("synthesis-hypothesis").textContent = syn.argon_hypothesis_kr;
-      document.getElementById("synthesis-pierced").textContent = `🗝️ 자물쇠 돌파 논리: ${syn.obstacle_pierced_kr}`;
-      document.getElementById("synthesis-result-card").classList.remove("hidden");
+      const titleEl = document.getElementById("synthesis-title");
+      const hypEl = document.getElementById("synthesis-hypothesis");
+      const obsEl =
+        document.getElementById("synthesis-obstacle") ||
+        document.getElementById("synthesis-pierced");
+      const cardEl = document.getElementById("synthesis-result-card");
+
+      if (titleEl) titleEl.textContent = `🔓 ${syn.deduction_title_kr}`;
+      if (hypEl) hypEl.textContent = syn.argon_hypothesis_kr;
+      if (obsEl) obsEl.textContent = `🗝️ 자물쇠 돌파 논리: ${syn.obstacle_pierced_kr}`;
+      if (cardEl) cardEl.classList.remove("hidden");
 
       updateHeartLockBanner("KEY_FOUND", `열쇠 발견: ${syn.obstacle_pierced_kr}`);
       btnSynthesizeClues.textContent = "✨ 단서 추론 완료 — [🔓 추론 해금 대사]가 대화창에 추가되었습니다";
@@ -636,16 +643,29 @@ function resetDarkroomSlots() {
   // Reset Showrunner Checklist Box
   const srScore = document.getElementById("showrunner-score-badge");
   if (srScore) srScore.textContent = "검수 대기 중...";
-  ["sr-check-1", "sr-check-2", "sr-check-3"].forEach((id, idx) => {
-    const el = document.getElementById(id);
+  const defaults = [
+    {
+      id: "sr-check-1",
+      title: "Cast Visual Continuity",
+      desc: "Cut 1~5 캐릭터 외형 및 트렌치코트 복장 연속성 검수 대기",
+    },
+    {
+      id: "sr-check-2",
+      title: "Observed Clue & Deduction Grounding",
+      desc: "플레이어 관찰 단서(Cut 2) 및 추론 대사(Cut 3~4) 정합성 검수 대기",
+    },
+    {
+      id: "sr-check-3",
+      title: "Postcard P.S. Alignment",
+      desc: "Cut 5 뒤집힌 엽서 뒷면의 친필 고백 및 P.S. 추신 일치 검수 대기",
+    },
+  ];
+  defaults.forEach((item) => {
+    const el = document.getElementById(item.id);
     if (!el) return;
     el.classList.remove("passed");
-    const titles = [
-      "⏳ 1. 캐스팅 & 의상 연속성 (Cast Visual Continuity) 확인 중...",
-      "⏳ 2. 관찰 단서 & 추론 정합성 (Observed Clue & Deduction Grounding) 확인 중...",
-      "⏳ 3. 사진 엽서 P.S. 손글씨 일치 (Postcard P.S. Alignment) 확인 중...",
-    ];
-    el.textContent = titles[idx];
+    el.classList.add("pending");
+    el.innerHTML = `<span class="sr-check-mark">⏳</span><div><strong>${item.title}</strong><p>${item.desc}</p></div>`;
   });
   const srNote = document.getElementById("showrunner-patch-note");
   if (srNote) {
@@ -670,25 +690,38 @@ function renderShowrunnerChecklist(checklist) {
     Object.assign(itemsMap, checklist.checks);
   }
 
-  const c1 = itemsMap.cast_visual_continuity;
-  const c2 = itemsMap.clue_and_deduction_grounding;
-  const c3 = itemsMap.postcard_ps_alignment;
+  const rows = [
+    {
+      elId: "sr-check-1",
+      dataCheck: "cast_visual_continuity",
+      item: itemsMap.cast_visual_continuity,
+      fallbackTitle: "Cast Visual Continuity",
+    },
+    {
+      elId: "sr-check-2",
+      dataCheck: "clue_and_deduction_grounding",
+      item: itemsMap.clue_and_deduction_grounding,
+      fallbackTitle: "Observed Clue & Deduction Grounding",
+    },
+    {
+      elId: "sr-check-3",
+      dataCheck: "postcard_ps_alignment",
+      item: itemsMap.postcard_ps_alignment,
+      fallbackTitle: "Postcard P.S. Alignment",
+    },
+  ];
 
-  const el1 = document.getElementById("sr-check-1");
-  if (el1 && c1) {
-    el1.classList.add("passed");
-    el1.textContent = `${c1.label || "✓ [Cast Visual Continuity]"} — ${c1.detail_kr}`;
-  }
-  const el2 = document.getElementById("sr-check-2");
-  if (el2 && c2) {
-    el2.classList.add("passed");
-    el2.textContent = `${c2.label || "✓ [Observed Clue & Deduction Grounding]"} — ${c2.detail_kr}`;
-  }
-  const el3 = document.getElementById("sr-check-3");
-  if (el3 && c3) {
-    el3.classList.add("passed");
-    el3.textContent = `${c3.label || "✓ [Postcard P.S. Alignment]"} — ${c3.detail_kr}`;
-  }
+  rows.forEach((r) => {
+    const el =
+      document.getElementById(r.elId) ||
+      document.querySelector(`.sr-check-item[data-check="${r.dataCheck}"]`);
+    if (el && r.item) {
+      el.classList.remove("pending");
+      el.classList.add("passed");
+      el.innerHTML = `<span class="sr-check-mark">✓</span><div><strong>${r.item.label || r.fallbackTitle}</strong><p>${r.item.detail_kr || ""}</p></div>`;
+    }
+  });
+
   const srNote = document.getElementById("showrunner-patch-note");
   if (srNote && checklist.auto_patch_note_kr) {
     srNote.textContent = `🎬 Argon Showrunner Note: ${checklist.auto_patch_note_kr}`;

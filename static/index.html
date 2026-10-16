@@ -10,6 +10,10 @@
       href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,500;0,600;0,700;1,400&family=Nanum+Myeongjo:wght@400;700;800&family=Nanum+Pen+Script&display=swap"
       rel="stylesheet"
     />
+    <link
+      rel="icon"
+      href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🎞️</text></svg>"
+    />
     <link rel="stylesheet" href="/styles.css" />
   </head>
   <body>
@@ -408,21 +412,21 @@
             <span id="showrunner-score-badge" class="showrunner-score-badge">검수 대기</span>
           </div>
           <div id="showrunner-checklist-items" class="showrunner-checklist-items">
-            <div class="sr-check-item pending" data-check="cast_visual_continuity">
+            <div id="sr-check-1" class="sr-check-item pending" data-check="cast_visual_continuity">
               <span class="sr-check-mark">⏳</span>
               <div>
                 <strong>Cast Visual Continuity</strong>
                 <p>Cut 1~5 캐릭터 외형 및 트렌치코트 복장 연속성 검수 대기</p>
               </div>
             </div>
-            <div class="sr-check-item pending" data-check="clue_and_deduction_grounding">
+            <div id="sr-check-2" class="sr-check-item pending" data-check="clue_and_deduction_grounding">
               <span class="sr-check-mark">⏳</span>
               <div>
                 <strong>Observed Clue & Deduction Grounding</strong>
                 <p>플레이어 관찰 단서(Cut 2) 및 추론 대사(Cut 3~4) 정합성 검수 대기</p>
               </div>
             </div>
-            <div class="sr-check-item pending" data-check="postcard_ps_alignment">
+            <div id="sr-check-3" class="sr-check-item pending" data-check="postcard_ps_alignment">
               <span class="sr-check-mark">⏳</span>
               <div>
                 <strong>Postcard P.S. Alignment</strong>
