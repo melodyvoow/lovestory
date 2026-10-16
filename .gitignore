@@ -1,0 +1,9 @@
+.env
+.env.local
+__pycache__/
+*.pyc
+.DS_Store
+outputs/
+node_modules/
+.venv/
+/tmp/

@@ -1,0 +1,914 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>LoveStory; v4.0 — Master Spec, Prompt Architecture & Presentation Deck</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,500;0,600;0,700;1,400&family=Nanum+Myeongjo:wght@400;700;800&family=Nanum+Pen+Script&family=Pretendard:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg-deep: #090b10;
+      --bg-card: #12151e;
+      --bg-elevated: #191d29;
+      --amber: #e2b878;
+      --amber-bright: #f5d196;
+      --amber-dim: rgba(226, 184, 120, 0.16);
+      --rain-cyan: #76a8c8;
+      --emerald: #6bcf9b;
+      --rose: #e57a7a;
+      --text-main: #f4efe6;
+      --text-sub: #b9b2a6;
+      --text-muted: #7d776d;
+      --border: rgba(226, 184, 120, 0.24);
+      --font-serif: 'Cormorant Garamond', 'Nanum Myeongjo', serif;
+      --font-sans: 'Pretendard', -apple-system, BlinkMacSystemFont, sans-serif;
+      --font-hand: 'Nanum Pen Script', cursive;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      background: radial-gradient(circle at 20% 0%, #192132 0%, var(--bg-deep) 60%);
+      color: var(--text-main);
+      font-family: var(--font-sans);
+      line-height: 1.65;
+      min-height: 100vh;
+      overflow-x: hidden;
+    }
+
+    /* Top Navigation Bar */
+    .master-header {
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 16px 36px;
+      background: rgba(9, 11, 16, 0.88);
+      backdrop-filter: blur(18px);
+      border-bottom: 1px solid var(--border);
+    }
+
+    .brand-group {
+      display: flex;
+      align-items: baseline;
+      gap: 14px;
+    }
+
+    .brand-logo {
+      font-family: var(--font-serif);
+      font-size: 1.75rem;
+      font-weight: 700;
+      color: var(--amber-bright);
+      letter-spacing: 0.03em;
+    }
+
+    .brand-logo span {
+      color: var(--rain-cyan);
+    }
+
+    .brand-tag {
+      font-size: 0.82rem;
+      color: var(--text-sub);
+      padding: 3px 10px;
+      border-radius: 999px;
+      background: var(--amber-dim);
+      border: 1px solid var(--border);
+    }
+
+    .tab-nav {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+    }
+
+    .tab-btn {
+      background: rgba(255, 255, 255, 0.04);
+      color: var(--text-sub);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      padding: 9px 18px;
+      border-radius: 999px;
+      font-size: 0.88rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.22s ease;
+    }
+
+    .tab-btn:hover {
+      color: var(--text-main);
+      border-color: var(--amber);
+    }
+
+    .tab-btn.active {
+      background: linear-gradient(135deg, #e2b878 0%, #c8964e 100%);
+      color: #0d0f14;
+      border-color: transparent;
+      box-shadow: 0 4px 18px rgba(226, 184, 120, 0.32);
+    }
+
+    .launch-app-link {
+      text-decoration: none;
+      background: rgba(118, 168, 200, 0.16);
+      color: #a9d6f5;
+      border: 1px solid rgba(118, 168, 200, 0.45);
+      padding: 9px 18px;
+      border-radius: 999px;
+      font-size: 0.88rem;
+      font-weight: 600;
+      transition: all 0.2s ease;
+    }
+
+    .launch-app-link:hover {
+      background: rgba(118, 168, 200, 0.28);
+      color: #fff;
+    }
+
+    /* Main Container */
+    .container {
+      max-width: 1280px;
+      margin: 0 auto;
+      padding: 36px 28px 80px;
+    }
+
+    .tab-panel {
+      display: none;
+      animation: fadeIn 0.32s ease;
+    }
+
+    .tab-panel.active {
+      display: block;
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(8px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    /* Hero Banner */
+    .hero-card {
+      background: linear-gradient(135deg, rgba(25, 29, 41, 0.92) 0%, rgba(16, 19, 28, 0.96) 100%);
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      padding: 36px;
+      margin-bottom: 32px;
+      position: relative;
+      overflow: hidden;
+      box-shadow: 0 24px 60px rgba(0, 0, 0, 0.45);
+    }
+
+    .hero-eyebrow {
+      font-size: 0.8rem;
+      text-transform: uppercase;
+      letter-spacing: 0.16em;
+      color: var(--amber);
+      margin-bottom: 10px;
+      font-weight: 600;
+    }
+
+    .hero-title {
+      font-family: var(--font-serif);
+      font-size: 2.5rem;
+      line-height: 1.2;
+      margin-bottom: 12px;
+      color: var(--text-main);
+    }
+
+    .hero-sub {
+      font-size: 1.05rem;
+      color: var(--text-sub);
+      max-width: 880px;
+      margin-bottom: 24px;
+    }
+
+    .pill-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+    }
+
+    .spec-pill {
+      font-size: 0.82rem;
+      padding: 6px 14px;
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      color: var(--amber-bright);
+    }
+
+    /* Grid Layouts */
+    .grid-2 {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(380px, 1fr));
+      gap: 24px;
+      margin-bottom: 28px;
+    }
+
+    .grid-3 {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+      gap: 20px;
+      margin-bottom: 28px;
+    }
+
+    .card {
+      background: var(--bg-card);
+      border: 1px solid rgba(255, 255, 255, 0.09);
+      border-radius: 16px;
+      padding: 24px;
+      transition: border-color 0.2s ease, transform 0.2s ease;
+    }
+
+    .card:hover {
+      border-color: var(--border);
+    }
+
+    .card-badge {
+      display: inline-block;
+      font-size: 0.75rem;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--amber);
+      background: var(--amber-dim);
+      padding: 4px 10px;
+      border-radius: 6px;
+      margin-bottom: 10px;
+    }
+
+    .card h3 {
+      font-family: var(--font-serif);
+      font-size: 1.35rem;
+      margin-bottom: 10px;
+      color: var(--text-main);
+    }
+
+    .card p {
+      font-size: 0.92rem;
+      color: var(--text-sub);
+      margin-bottom: 12px;
+    }
+
+    .feature-list {
+      list-style: none;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .feature-list li {
+      font-size: 0.88rem;
+      color: var(--text-sub);
+      padding-left: 18px;
+      position: relative;
+    }
+
+    .feature-list li::before {
+      content: "✦";
+      position: absolute;
+      left: 0;
+      color: var(--amber);
+    }
+
+    /* Code & Prompt Blocks */
+    pre.code-box {
+      background: #07090d;
+      border: 1px solid rgba(226, 184, 120, 0.25);
+      border-radius: 12px;
+      padding: 16px 18px;
+      font-family: 'SFMono-Regular', Consolas, Menlo, monospace;
+      font-size: 0.83rem;
+      color: #e6dfd3;
+      overflow-x: auto;
+      white-space: pre-wrap;
+      word-break: break-word;
+      line-height: 1.55;
+      margin-top: 10px;
+    }
+
+    .code-highlight {
+      color: var(--amber-bright);
+      font-weight: 600;
+    }
+
+    /* Interactive 3D Postcard Demo in Overview */
+    .demo-postcard-scene {
+      perspective: 1200px;
+      width: 100%;
+      max-width: 480px;
+      height: 290px;
+      margin: 14px auto;
+      cursor: pointer;
+    }
+
+    .demo-postcard-inner {
+      position: relative;
+      width: 100%;
+      height: 100%;
+      transform-style: preserve-3d;
+      transition: transform 0.85s cubic-bezier(0.22, 1, 0.36, 1);
+    }
+
+    .demo-postcard-scene.flipped .demo-postcard-inner {
+      transform: rotateY(180deg);
+    }
+
+    .demo-face {
+      position: absolute;
+      inset: 0;
+      backface-visibility: hidden;
+      border-radius: 14px;
+      padding: 24px;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      box-shadow: 0 18px 42px rgba(0, 0, 0, 0.55);
+    }
+
+    .demo-front {
+      background: linear-gradient(135deg, #1e2536 0%, #10141f 100%);
+      border: 1px solid var(--amber);
+      color: var(--text-main);
+    }
+
+    .demo-back {
+      background: #f5efe2;
+      color: #26201a;
+      transform: rotateY(180deg);
+      border: 1px solid #d4c3a3;
+    }
+
+    .demo-back-body {
+      font-family: var(--font-hand);
+      font-size: 1.42rem;
+      line-height: 1.35;
+      color: #2b231c;
+    }
+
+    .demo-back-ps {
+      font-family: var(--font-hand);
+      font-size: 1.25rem;
+      color: #5e3a24;
+      border-top: 1px dashed rgba(94, 58, 36, 0.35);
+      padding-top: 8px;
+    }
+
+    /* Presentation Deck Styles (#tab-deck) */
+    .deck-controls {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 20px;
+      background: var(--bg-card);
+      padding: 14px 22px;
+      border-radius: 14px;
+      border: 1px solid var(--border);
+    }
+
+    .slide-dots {
+      display: flex;
+      gap: 8px;
+    }
+
+    .slide-dot {
+      width: 34px;
+      height: 34px;
+      border-radius: 8px;
+      border: 1px solid rgba(255, 255, 255, 0.16);
+      background: rgba(255, 255, 255, 0.04);
+      color: var(--text-sub);
+      font-weight: 700;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+
+    .slide-dot.active {
+      background: var(--amber);
+      color: #090b10;
+      border-color: var(--amber);
+    }
+
+    .deck-slide {
+      display: none;
+      background: linear-gradient(145deg, #131722 0%, #0d1018 100%);
+      border: 1px solid var(--border);
+      border-radius: 22px;
+      padding: 44px;
+      min-height: 540px;
+      box-shadow: 0 28px 70px rgba(0, 0, 0, 0.55);
+      position: relative;
+    }
+
+    .deck-slide.active {
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      animation: fadeIn 0.3s ease;
+    }
+
+    .slide-header {
+      border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+      padding-bottom: 20px;
+      margin-bottom: 28px;
+    }
+
+    .slide-num {
+      font-size: 0.82rem;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: var(--amber);
+      font-weight: 700;
+    }
+
+    .slide-title {
+      font-family: var(--font-serif);
+      font-size: 2.2rem;
+      color: var(--text-main);
+      margin-top: 6px;
+    }
+
+    .slide-footer {
+      margin-top: 32px;
+      padding-top: 16px;
+      border-top: 1px solid rgba(255, 255, 255, 0.08);
+      display: flex;
+      justify-content: space-between;
+      font-size: 0.82rem;
+      color: var(--text-muted);
+    }
+
+    table.spec-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 12px;
+      font-size: 0.88rem;
+    }
+
+    table.spec-table th,
+    table.spec-table td {
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      padding: 12px 14px;
+      text-align: left;
+    }
+
+    table.spec-table th {
+      background: rgba(226, 184, 120, 0.12);
+      color: var(--amber-bright);
+      font-weight: 600;
+    }
+
+    table.spec-table td {
+      color: var(--text-sub);
+    }
+  </style>
+</head>
+<body>
+
+  <header class="master-header">
+    <div class="brand-group">
+      <div class="brand-logo">LoveStory<span>;</span></div>
+      <span class="brand-tag">v4.0 Final Master Edition · Google DeepMind Hackathon</span>
+    </div>
+
+    <nav class="tab-nav">
+      <button class="tab-btn active" onclick="switchMasterTab('tab-overview', this)">① v4.0 아키텍처 & 핵심 기능</button>
+      <button class="tab-btn" onclick="switchMasterTab('tab-prompts', this)">② 프롬프트 공식 & 검증 루프 명세</button>
+      <button class="tab-btn" onclick="switchMasterTab('tab-deck', this)">③ 심사위원 발표 덱 (6 Slides)</button>
+      <a href="/" class="launch-app-link">🎬 라이브 서비스 실행하기 →</a>
+    </nav>
+  </header>
+
+  <main class="container">
+
+    <!-- ==========================================
+         TAB 1: OVERVIEW & ARCHITECTURE
+         ========================================== -->
+    <section id="tab-overview" class="tab-panel active">
+      <div class="hero-card">
+        <div class="hero-eyebrow">Track 1: Entertainment · Interactive AI Short Drama Studio</div>
+        <h1 class="hero-title">LoveStory; — Choose the moment of love. The story doesn’t end here.</h1>
+        <p class="hero-sub">
+          플레이어가 직접 <strong>① 4단계 다이나믹 스토리 디렉팅</strong>으로 배역·장소·관계·첫 단서를 설계하면,
+          서비스 내부에서 실시간으로 <strong>② 실사×지브리 수채화 감성의 현장 스틸컷과 3컷 프리퀄</strong>을 인화하고,
+          2턴의 대화 끝에 <strong>③ 3D 사진 엽서 플립(손글씨 본문 + 단서/대사 기반 P.S.)</strong>과
+          <strong>④ 1970s 시네마 베리테 5컷 마스터 MP4 단편 드라마</strong>를 완성하여 <strong>⑤ 내 필름 보관함(My Film Vault)</strong>에 영구 소장합니다.
+        </p>
+        <div class="pill-row">
+          <span class="spec-pill">🧠 gemini-4-argon (Interactions API)</span>
+          <span class="spec-pill">🎨 gemini-nano-banana-2.1 (Ghibli Watercolor × 35mm)</span>
+          <span class="spec-pill">🎞️ gemini-omni-1.1-flash (1970s Cinema Verite)</span>
+          <span class="spec-pill">💌 3D CSS Postcard Flip (Grounded P.S.)</span>
+          <span class="spec-pill">🗄️ My Film Vault (엔딩별 MP4 + 엽서 아카이브)</span>
+        </div>
+      </div>
+
+      <div class="grid-2">
+        <div class="card">
+          <span class="card-badge">Feature 01 · 4-Step Dynamic Director</span>
+          <h3>4단계 다이나믹 스토리 디렉터 온보딩</h3>
+          <p>고정된 단일 시나리오가 아닌, 플레이어가 매 플레이마다 새로운 로맨스 단편영화를 연출합니다.</p>
+          <ul class="feature-list">
+            <li><strong>Step 1 배역 캐스팅:</strong> 여성 주인공(파트너 <strong>이준</strong>, 29세 스트리트 포토그래퍼) vs 남성 주인공(파트너 <strong>이서</strong>, 29세 스트리트 포토그래퍼)</li>
+            <li><strong>Step 2 공간 선택:</strong> 마감 10분 전 창가 카페(<code>rainy_cafe</code>) / 안개 낀 새벽 기차역(<code>midnight_station</code>) / 지하 아날로그 암실(<code>red_darkroom</code>)</li>
+            <li><strong>Step 3 관계와 순간:</strong> 떠나기 전 마지막 밤(<code>parting_before_trip</code>) / 7년 지기 친구 고백 직전(<code>unspoken_first_love</code>) / 3년 만의 우연한 재회(<code>reunion_after_years</code>)</li>
+            <li><strong>Step 4 첫 시선 단서:</strong> 젖은 왼쪽 어깨(<code>wet_sleeve</code>) / 만지작거리는 사진 엽서(<code>postcard</code>) / 출발 일정표 티켓(<code>itinerary</code>)</li>
+          </ul>
+        </div>
+
+        <div class="card">
+          <span class="card-badge">Feature 02 · Killer Wow Point</span>
+          <h3>3D 사진 엽서 플립 (클릭해서 뒤집어보세요)</h3>
+          <p>게임 내내 앞면만 보이던 암실 인화 사진 엽서가 2턴 종료 즉시 180도 회전하며 <code>gemini-4-argon</code>이 작성한 손글씨와 P.S.를 공개합니다.</p>
+          <div class="demo-postcard-scene" onclick="this.classList.toggle('flipped')">
+            <div class="demo-postcard-inner">
+              <div class="demo-face demo-front">
+                <div style="font-size:0.78rem; color:var(--amber); letter-spacing:0.12em;">DARKROOM GELATIN SILVER PRINT · FRONT</div>
+                <div style="font-family:var(--font-serif); font-size:1.45rem; line-height:1.4;">
+                  "처음 우산을 나눠 썼던 날,<br/>내 렌즈가 멈춘 곳은 늘 너였어."
+                </div>
+                <div style="font-size:0.82rem; color:var(--rain-cyan);">↻ 카드를 클릭하면 180° 3D 플립으로 뒷면 손글씨가 공개됩니다</div>
+              </div>
+              <div class="demo-face demo-back">
+                <div class="demo-back-body">
+                  "비 오는 창가에서 네가 내 젖은 어깨를 먼저 걱정해 줬을 때, 사실은 떠나기 싫다는 말이 목끝까지 차올랐어. 이 사진 뒤에 적어둔 마음이 네게 부담이 아닌 따뜻한 온기로 남기를 바랄게."
+                </div>
+                <div class="demo-back-ps">
+                  P.S. 아까 내 젖은 왼쪽 어깨(wet_sleeve)를 살며시 짚어주며 "가지 마, 기다릴게"라고 말해줘서 고마워. 다녀와서 가장 먼저 네 사진부터 인화할게. — 이준
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="grid-3">
+        <div class="card">
+          <span class="card-badge">Feature 03 · In-App Live Generation</span>
+          <h3>실시간 현장 스틸컷 & 3컷 프리퀄 인화</h3>
+          <p><code>POST /api/session/start</code> 호출 즉시 선택한 장소·관계·캐릭터 프로필에 맞춰 현장 스틸컷 1장과 다채로운 앵글의 프리퀄 3컷(하이앵글 우산 투샷 → 익스트림 매크로 암실 만년필 샷 → 창밖 투과 익스테리어 샷)을 실시간 생성합니다.</p>
+        </div>
+        <div class="card">
+          <span class="card-badge">Feature 04 · 5-Cut Autonomous Loop</span>
+          <h3>5가지 앵글 문법 & 자율 검증 루프</h3>
+          <p><code>gemini-4-argon</code>(<code>thinking_level="high"</code>)이 설계한 5컷 콘티를 <code>_validate_five_cut_plan</code>이 5대 규칙(스키마·배역 일관성·미관찰 단서 환각 차단·1970s 시네마 베리테 공식·5대 앵글 다양성)으로 검증 및 자기교정합니다.</p>
+        </div>
+        <div class="card">
+          <span class="card-badge">Feature 05 · My Film Vault</span>
+          <h3>🎞️ 내 필름 보관함 (엔딩 아카이브)</h3>
+          <p>완성된 모든 플레이의 마스터 MP4, 프리뷰 MP4, 엽서 뒷면 손글씨, <code>P.S.</code> 노트, 5컷 스토리보드가 <code>/tmp/lovestory_jobs/vault_index.json</code> 및 브라우저 <code>localStorage</code>에 자동 보관되어 언제든 다시 감상·비교할 수 있습니다.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- ==========================================
+         TAB 2: PROMPTS & VERIFICATION SPEC
+         ========================================== -->
+    <section id="tab-prompts" class="tab-panel">
+      <div class="grid-2">
+        <div class="card">
+          <span class="card-badge">Mandatory Visual Lock · Image</span>
+          <h3>실사 × 지브리풍 서정적 수채화 경계 화풍 (GLOBAL_STYLE_SUFFIX)</h3>
+          <p>모든 스틸컷, 프리퀄 3컷, 본편 5컷 스토리보드 생성 시 <code>gemini-nano-banana-2.1</code> 프롬프트 하단에 강제 결합되는 스타일 락입니다.</p>
+          <pre class="code-box"><span class="code-highlight">GLOBAL_STYLE_SUFFIX</span> = (
+  "On the delicate boundary between live-action cinema and lyrical Studio Ghibli "
+  "watercolor animation, semi-realistic painterly illustration, soft hand-painted "
+  "gouache and watercolor washes on warm paper grain, realistic 35mm lens shallow "
+  "depth of field, warm amber tungsten lighting contrasting with cool rainy night "
+  "reflections, emotional Korean romance aesthetic, 9:16 vertical composition."
+)</pre>
+        </div>
+
+        <div class="card">
+          <span class="card-badge">Mandatory Video Formula · Motion</span>
+          <h3>1970s Cinema Verite 필수 영상화 공식 (format_video_prompt)</h3>
+          <p><code>gemini-omni-1.1-flash</code> 비디오 생성 및 5컷 콘티 검증 루프에서 모든 <code>video_motion_prompt</code>가 반드시 준수해야 하는 공식입니다.</p>
+          <pre class="code-box"><span class="code-highlight">CINEMA_VERITE_SUFFIX</span> = (
+  "1970s cinema verite documentary style, candid street cinematography, "
+  "authentic vintage broadcast look."
+)
+
+def <span class="code-highlight">format_video_prompt</span>(scene_desc: str) -> str:
+    cleaned = (scene_desc or "").strip().rstrip(".")
+    if CINEMA_VERITE_SUFFIX.lower() in cleaned.lower():
+        return cleaned if cleaned.endswith(".") else f"{cleaned}."
+    return f"{cleaned}, {CINEMA_VERITE_SUFFIX}"</pre>
+        </div>
+      </div>
+
+      <div class="card" style="margin-bottom: 28px;">
+        <span class="card-badge">Cinematography Grammar · 3 Prequel + 5 Main Cuts</span>
+        <h3>단조로움을 완전히 제거한 다채로운 카메라 앵글 문법</h3>
+        <table class="spec-table">
+          <thead>
+            <tr>
+              <th>구분</th>
+              <th>필수 카메라 앵글 & 렌즈 문법</th>
+              <th>연출 의도 및 시각적 디테일</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><strong>Prequel Cut 1</strong></td>
+              <td><code>High-Angle Umbrella Two-Shot</code></td>
+              <td>투명 비닐우산 위에서 내려다본 하이앵글 투샷, 수채화 진주처럼 튀는 빗방울과 플레이어를 향한 시선</td>
+            </tr>
+            <tr>
+              <td><strong>Prequel Cut 2</strong></td>
+              <td><code>Extreme Macro Low-Angle Darkroom Shot</code></td>
+              <td>붉은 암실 안전등 아래 사진 엽서 뒷면 위에서 망설이는 황동 만년필 촉의 익스트림 매크로 로우앵글</td>
+            </tr>
+            <tr>
+              <td><strong>Prequel Cut 3</strong></td>
+              <td><code>Exterior-to-Interior Through-Glass Shot</code></td>
+              <td>비 내리는 창밖/플랫폼 안개 너머에서 실내의 두 사람을 바라보는 투과 익스테리어 샷</td>
+            </tr>
+            <tr>
+              <td><strong>Main Cut 1 (4s)</strong></td>
+              <td><code>Exterior Through-Glass Wide/Medium Two-Shot</code></td>
+              <td>플레이어가 선택한 장소(카페/기차역/암실)의 공기감과 빗물 보케를 담는 도입부 투샷</td>
+            </tr>
+            <tr>
+              <td><strong>Main Cut 2 (4s)</strong></td>
+              <td><code>85mm Extreme Macro Shallow-DOF Insert</code></td>
+              <td>플레이어가 실제로 클릭한 단서(<code>observed_clues</code>)만을 85mm 극접사로 포착 (미클릭 단서 엄격 배제)</td>
+            </tr>
+            <tr>
+              <td><strong>Main Cut 3 (6–8s)</strong></td>
+              <td><code>Intimate Over-the-Shoulder (OTS) / Dutch-Tilt Close-Up</code></td>
+              <td>결정적 대사와 흔들리는 눈빛을 포착하는 오버더숄더 및 감성 클로즈업</td>
+            </tr>
+            <tr>
+              <td><strong>Main Cut 4 (5s)</strong></td>
+              <td><code>Dynamic Low-Angle Table-Level Action Close-Up</code></td>
+              <td>엔딩 타입별 결정적 행동(엽서를 건네며 맞닿는 손 / 두 손 위 약속 / 코트 주머니에 간직)</td>
+            </tr>
+            <tr>
+              <td><strong>Main Cut 5 (4s)</strong></td>
+              <td><code>Top-Down Overhead Flat-Lay Transition</code></td>
+              <td>테이블 위 뒤집힌 사진 엽서 뒷면의 손글씨 본문과 P.S. 노트로 디졸브되는 탑다운 에필로그</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="card">
+        <span class="card-badge">Autonomous Verification Loop · _validate_five_cut_plan</span>
+        <h3>gemini-4-argon (thinking_level="high") 5대 자율 검증 및 자기교정 규칙</h3>
+        <pre class="code-box">1. [Rule 1: Schema & 5 Cuts] 정확히 5개의 컷(cut_number 1..5)과 각 컷의 duration_sec 범위(3~10초) 검증
+2. [Rule 2: Cast Profile Consistency] 5개 모든 컷의 image_prompt에 성별 캐스팅(이준/이서) 시각 프롬프트 포함 강제
+3. [Rule 3: Observed Clues Grounding] Cut 2에서 플레이어가 클릭하지 않은 단서(un-observed clue) 언급 시 즉시 차단 및 재작성
+4. [Rule 4: 1970s Cinema Verite Formula] 모든 video_motion_prompt가 정확히 "1970s cinema verite documentary style, candid street cinematography, authentic vintage broadcast look."으로 끝나는지 검증
+5. [Rule 5: Diverse Camera Angles] 5개 컷의 camera_angle이 중복 없이 서로 다른 5가지 시네마틱 앵글 문법을 사용하는지 검증</pre>
+      </div>
+    </section>
+
+    <!-- ==========================================
+         TAB 3: 6-SLIDE PRESENTATION DECK
+         ========================================== -->
+    <section id="tab-deck" class="tab-panel">
+      <div class="deck-controls">
+        <div style="font-weight:600; color:var(--amber-bright);">
+          🎤 Google DeepMind AI Hackathon — 최종 발표 덱 (키보드 ← / → 또는 번호 클릭)
+        </div>
+        <div class="slide-dots">
+          <button class="slide-dot active" onclick="showSlide(0)">1</button>
+          <button class="slide-dot" onclick="showSlide(1)">2</button>
+          <button class="slide-dot" onclick="showSlide(2)">3</button>
+          <button class="slide-dot" onclick="showSlide(3)">4</button>
+          <button class="slide-dot" onclick="showSlide(4)">5</button>
+          <button class="slide-dot" onclick="showSlide(5)">6</button>
+        </div>
+      </div>
+
+      <!-- Slide 1 -->
+      <div class="deck-slide active">
+        <div>
+          <div class="slide-header">
+            <div class="slide-num">SLIDE 01 / 06 · VISION & PROBLEM</div>
+            <h2 class="slide-title">LoveStory; — 사랑의 순간을 선택하세요, 이야기는 여기서 끝나지 않습니다</h2>
+          </div>
+          <div class="grid-2">
+            <div class="card">
+              <span class="card-badge">기존 인터랙티브 스토리의 한계</span>
+              <h3>텍스트 분기만 남고, ‘우리만의 영화’는 남지 않는다</h3>
+              <ul class="feature-list">
+                <li>고정된 배경과 정적인 텍스트 선택지만 반복되어 시각적·감성적 몰입이 깨짐</li>
+                <li>내가 눈여겨본 사소한 단서나 내가 직접 건넨 대사가 엔딩 오브제나 영상에 반영되지 않음</li>
+                <li>플레이가 끝나면 휘발되어 다시 꺼내볼 수 있는 영화적 결과물이 부재함</li>
+              </ul>
+            </div>
+            <div class="card">
+              <span class="card-badge">LoveStory; v4.0의 해답</span>
+              <h3>플레이어가 감독이자 주인공이 되는 AI 단편 로맨스 스튜디오</h3>
+              <ul class="feature-list">
+                <li><strong>4단계 다이나믹 디렉팅:</strong> 배역·장소·관계·첫 시선을 조합해 매번 새로운 로맨스 영화 연출</li>
+                <li><strong>실시간 인앱 인화:</strong> 실사×지브리 수채화 감성의 스틸컷 & 3컷 프리퀄 실시간 생성</li>
+                <li><strong>3D 사진 엽서 플립 & 5컷 마스터 MP4:</strong> 내 선택이 적힌 손글씨 P.S.와 1970s 시네마 베리테 단편영화를 <strong>내 필름 보관함</strong>에 영구 소장</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+        <div class="slide-footer">
+          <span>LoveStory; v4.0 Master Edition</span>
+          <span>Slide 1 / 6</span>
+        </div>
+      </div>
+
+      <!-- Slide 2 -->
+      <div class="deck-slide">
+        <div>
+          <div class="slide-header">
+            <div class="slide-num">SLIDE 02 / 06 · 4-STEP DYNAMIC STORY DIRECTOR</div>
+            <h2 class="slide-title">4단계 다이나믹 온보딩 & 서비스 내부 실시간 에셋 인화</h2>
+          </div>
+          <div class="grid-2">
+            <div class="card">
+              <span class="card-badge">Step 1 ~ Step 4 조합</span>
+              <h3>2 × 3 × 3 × 3 = 54가지 오프닝 시나리오 조합</h3>
+              <ul class="feature-list">
+                <li><strong>Step 1 (Who):</strong> 이준(29세 남성 포토그래퍼) vs 이서(29세 여성 포토그래퍼) 성별 맞춤 캐스팅 고정</li>
+                <li><strong>Step 2 (Where):</strong> 마감 10분 전 창가 카페 / 안개 낀 새벽 기차역 / 지하 아날로그 사진 암실</li>
+                <li><strong>Step 3 (Moment):</strong> 떠나기 전 마지막 밤 / 7년 지기 친구의 고백 / 3년 만의 옛 연인 재회</li>
+                <li><strong>Step 4 (Anchor Clue):</strong> 시작과 동시에 플레이어의 시선이 머문 첫 단서 각인</li>
+              </ul>
+            </div>
+            <div class="card">
+              <span class="card-badge">Live In-App Asset Generation</span>
+              <h3>외부 정적 파일 의존 제로 — 실시간 스틸컷 & 3컷 프리퀄</h3>
+              <ul class="feature-list">
+                <li><code>POST /api/session/start</code> 호출 시 <code>gemini-nano-banana-2.1</code>이 선택한 장소와 캐릭터에 맞춘 현장 배경 스틸컷과 프리퀄 3컷을 즉시 생성</li>
+                <li>네트워크 지연 시에도 한글 명조/고딕 타이포그래피와 수채화 그레인이 적용된 실시간 프로시저럴 캔버스 폴백으로 0초 대기 보장</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+        <div class="slide-footer">
+          <span>LoveStory; v4.0 Master Edition</span>
+          <span>Slide 2 / 6</span>
+        </div>
+      </div>
+
+      <!-- Slide 3 -->
+      <div class="deck-slide">
+        <div>
+          <div class="slide-header">
+            <div class="slide-num">SLIDE 03 / 06 · VISUAL & MOTION FORMULA</div>
+            <h2 class="slide-title">실사 × 지브리풍 서정적 수채화 화풍 & 1970s 시네마 베리테 공식</h2>
+          </div>
+          <div class="grid-2">
+            <div class="card">
+              <span class="card-badge">Image Style Lock</span>
+              <h3>Live-Action Cinema × Studio Ghibli Watercolor</h3>
+              <p>차갑고 인위적인 3D CG 느낌을 배제하고, 따뜻한 종이 질감 위의 과슈·수채화 번짐과 35mm 아나모픽 렌즈의 얕은 심도를 결합해 한국적 로맨스 감성을 극대화했습니다.</p>
+              <pre class="code-box">On the delicate boundary between live-action cinema and lyrical Studio Ghibli watercolor animation, semi-realistic painterly illustration, soft hand-painted gouache and watercolor washes on warm paper grain, realistic 35mm lens shallow depth of field...</pre>
+            </div>
+            <div class="card">
+              <span class="card-badge">Motion Style Lock</span>
+              <h3>1970s Cinema Verite Documentary Formula</h3>
+              <p>모든 영상 컷(<code>gemini-omni-1.1-flash</code>)에 1970년대 시네마 베리테 다큐멘터리 공식을 강제 적용하여, 인위적인 카메라 워크 대신 숨결이 느껴지는 아날로그 필름 질감을 구현했습니다.</p>
+              <pre class="code-box">[Scene & Motion Description], 1970s cinema verite documentary style, candid street cinematography, authentic vintage broadcast look.</pre>
+            </div>
+          </div>
+        </div>
+        <div class="slide-footer">
+          <span>LoveStory; v4.0 Master Edition</span>
+          <span>Slide 3 / 6</span>
+        </div>
+      </div>
+
+      <!-- Slide 4 -->
+      <div class="deck-slide">
+        <div>
+          <div class="slide-header">
+            <div class="slide-num">SLIDE 04 / 06 · THE KILLER WOW POINT</div>
+            <h2 class="slide-title">3D 사진 엽서 플립 — 단서와 대사가 살아 숨 쉬는 손글씨 P.S.</h2>
+          </div>
+          <div class="grid-2">
+            <div class="card">
+              <span class="card-badge">Observed Clues vs Confirmed Facts</span>
+              <h3>플레이어의 관찰과 대사를 완벽히 기억하는 연기 뇌</h3>
+              <ul class="feature-list">
+                <li>플레이어가 조사한 단서(<code>wet_sleeve</code>, <code>postcard</code>, <code>itinerary</code>)와 2턴 동안 건넨 실제 대사를 <code>play_log_snapshot</code>에 기록</li>
+                <li>2턴 종료와 함께 <code>FEELINGS_CONFIRMED</code>, <code>PROMISE_LEFT</code>, <code>UNSPOKEN_PARTING</code> 3대 정통 엔딩 중 하나로 수렴</li>
+              </ul>
+            </div>
+            <div class="card">
+              <span class="card-badge">180° 3D CSS Card Flip</span>
+              <h3>세상에 단 하나뿐인 손글씨 고백과 P.S. 추신</h3>
+              <ul class="feature-list">
+                <li>게임 내내 앞면만 보이던 흑백 암실 사진 엽서가 엔딩 순간 3D 애니메이션으로 뒤집힘</li>
+                <li>뒷면에는 <code>gemini-4-argon</code>이 실시간 집필한 서정적 본문과 함께, 플레이어가 클릭한 단서와 대사를 정확히 언급하는 맞춤형 <strong>P.S. 추신</strong>이 한국어/영문 손글씨로 각인됨</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+        <div class="slide-footer">
+          <span>LoveStory; v4.0 Master Edition</span>
+          <span>Slide 4 / 6</span>
+        </div>
+      </div>
+
+      <!-- Slide 5 -->
+      <div class="deck-slide">
+        <div>
+          <div class="slide-header">
+            <div class="slide-num">SLIDE 05 / 06 · 5-CUT CINEMATOGRAPHY & AUTONOMOUS LOOP</div>
+            <h2 class="slide-title">5가지 다채로운 카메라 앵글 & 자율 검증 루프 (Self-Correction)</h2>
+          </div>
+          <div class="grid-2">
+            <div class="card">
+              <span class="card-badge">5 Distinct Camera Angles</span>
+              <h3>정면 미디엄샷의 반복을 깨는 영화적 컷 구성</h3>
+              <ul class="feature-list">
+                <li><strong>Cut 1 (4s):</strong> 창밖/안개 너머 투과 와이드·미디엄 투샷</li>
+                <li><strong>Cut 2 (4s):</strong> 85mm 극접사 단서 인서트 (클릭한 단서만 등장)</li>
+                <li><strong>Cut 3 (6–8s):</strong> 오버더숄더(OTS) & 더치 틸트 감정 클로즈업</li>
+                <li><strong>Cut 4 (5s):</strong> 테이블 레벨 로우앵글 손끝/엽서 전달 클라이맥스</li>
+                <li><strong>Cut 5 (4s):</strong> 탑다운 오버헤드 플랫레이 → 엽서 뒷면 손글씨 디졸브</li>
+              </ul>
+            </div>
+            <div class="card">
+              <span class="card-badge">Autonomous Verification Loop</span>
+              <h3>환각 제로를 보장하는 5대 규칙 자기교정 루프</h3>
+              <ul class="feature-list">
+                <li><code>gemini-4-argon</code>(<code>thinking_level="high"</code>)이 생성한 JSON 콘티를 <code>_validate_five_cut_plan</code>이 즉시 감사</li>
+                <li>미클릭 단서 등장, 캐스팅 누락, 1970s 시네마 베리테 접미사 누락, 앵글 중복 발견 시 에러 원인을 피드백하여 최대 2회 자율 재작성 수행</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+        <div class="slide-footer">
+          <span>LoveStory; v4.0 Master Edition</span>
+          <span>Slide 5 / 6</span>
+        </div>
+      </div>
+
+      <!-- Slide 6 -->
+      <div class="deck-slide">
+        <div>
+          <div class="slide-header">
+            <div class="slide-num">SLIDE 06 / 06 · MY FILM VAULT & CLOUD RUN ARCHITECTURE</div>
+            <h2 class="slide-title">🎞️ 내 필름 보관함 (My Film Vault) & 무중단 Cloud Run 아키텍처</h2>
+          </div>
+          <div class="grid-2">
+            <div class="card">
+              <span class="card-badge">Multi-Ending Collector Experience</span>
+              <h3>엔딩별 MP4 단편영화와 손글씨 엽서를 영구 소장·비교</h3>
+              <ul class="feature-list">
+                <li>모든 플레이 완료 시 <code>/tmp/lovestory_jobs/vault_index.json</code>과 브라우저 <code>localStorage</code>에 자동 아카이빙</li>
+                <li>상단 헤더의 <strong>[🎞️ 내 필름 보관함]</strong> 모달에서 내가 만든 모든 엔딩의 마스터 MP4를 즉시 재생하고, 각 엔딩의 손글씨 엽서와 P.S.를 한눈에 비교</li>
+              </ul>
+            </div>
+            <div class="card">
+              <span class="card-badge">Single-Container Cloud Run Ready</span>
+              <h3>외부 DB 없이 단일 컨테이너에서 완결되는 초고속 파이프라인</h3>
+              <ul class="feature-list">
+                <li><strong>2단계 프로그레시브 인코딩:</strong> 스토리보드 완성 즉시 수 초 내 <code>preview.mp4</code> 우선 제공 → 백그라운드 <code>gemini-omni-1.1-flash</code> 렌더링 후 <code>master.mp4</code> 자동 승격</li>
+                <li>단일 Docker 컨테이너(<code>FastAPI + FFmpeg</code>, <code>max-instances=1</code>, <code>no-cpu-throttling</code>)로 즉시 배포 가능</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+        <div class="slide-footer">
+          <span>LoveStory; v4.0 Master Edition</span>
+          <span>Slide 6 / 6</span>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <script>
+    function switchMasterTab(tabId, btnEl) {
+      document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+      document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+      const target = document.getElementById(tabId);
+      if (target) target.classList.add('active');
+      if (btnEl) btnEl.classList.add('active');
+    }
+
+    let currentSlideIdx = 0;
+    function showSlide(idx) {
+      const slides = document.querySelectorAll('.deck-slide');
+      const dots = document.querySelectorAll('.slide-dots .slide-dot');
+      if (!slides.length) return;
+      currentSlideIdx = (idx + slides.length) % slides.length;
+      slides.forEach((s, i) => s.classList.toggle('active', i === currentSlideIdx));
+      dots.forEach((d, i) => d.classList.toggle('active', i === currentSlideIdx));
+    }
+
+    document.addEventListener('keydown', (e) => {
+      const deckPanel = document.getElementById('tab-deck');
+      if (!deckPanel || !deckPanel.classList.contains('active')) return;
+      if (e.key === 'ArrowRight') showSlide(currentSlideIdx + 1);
+      if (e.key === 'ArrowLeft') showSlide(currentSlideIdx - 1);
+    });
+  </script>
+</body>
+</html>

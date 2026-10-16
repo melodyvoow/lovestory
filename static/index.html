@@ -1,0 +1,642 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>LoveStory; — Choose the moment of love (v4.0 Complete Edition)</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,500;0,600;0,700;1,400&family=Nanum+Myeongjo:wght@400;700;800&family=Nanum+Pen+Script&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <!-- Top Cinema Header -->
+    <header class="cinema-header">
+      <div style="display: flex; align-items: baseline;">
+        <span class="brand-logo">LoveStory<span class="semicolon">;</span></span>
+        <span class="brand-subtitle">Choose the moment of love. The story doesn’t end here.</span>
+      </div>
+
+      <div class="header-action-group">
+        <button type="button" id="btn-vault-modal" class="header-btn vault-btn">
+          🎞️ 내 필름 보관함 (<span id="vault-count-badge">0</span>)
+        </button>
+        <button type="button" id="btn-judge-modal" class="header-btn">
+          🎬 Studio & Architecture
+        </button>
+      </div>
+    </header>
+
+    <!-- Main Stage Layout -->
+    <main class="cinema-stage-wrapper">
+      <!-- Centered 9:16 Vertical Short-Drama Stage -->
+      <section class="vertical-stage">
+        <!-- View 1: 4-Step Dynamic Story Director Onboarding -->
+        <div id="view-casting" class="stage-view active">
+          <div class="director-container">
+            <div class="director-header">
+              <span style="font-size: 0.68rem; letter-spacing: 0.16em; color: var(--gold-accent);">
+                GOOGLE DEEPMIND AI HACKATHON • TRACK 1
+              </span>
+              <h1 style="font-family: 'Cormorant Garamond', serif; font-size: 2.15rem; line-height: 1.08; margin: 4px 0 6px;">
+                LoveStory<span style="color: var(--gold-accent); font-family: serif;">;</span>
+              </h1>
+              <p style="font-size: 0.75rem; color: var(--text-muted); line-height: 1.4;">
+                당신이 직접 4단계를 디렉팅하여 지브리 수채화 × 1970s 시네마 베리테 단막극을 인화합니다.
+              </p>
+            </div>
+
+            <!-- Step 1: Who am I & Who is my partner? -->
+            <div>
+              <div class="director-step-title"><span>STEP 1</span> 당신과 파트너를 선택하세요 (Cast Profile & 캐릭터 자산)</div>
+              <div class="step-card-grid">
+                <div class="choice-chip chip-gender selected" data-gender="female">
+                  <h4>이준 (Ijun, 29세 거리 사진가)</h4>
+                  <p>주인공: 여성 (27세, 아이보리 울 코트) | 젖은 짙은 갈색 트렌치코트, 1970s 35mm 카메라, 깊은 눈빛</p>
+                </div>
+                <div class="choice-chip chip-gender" data-gender="male">
+                  <h4>이서 (Iseo, 29세 거리 사진가)</h4>
+                  <p>주인공: 남성 (28세, 차콜 코트 & 블랙 터틀넥) | 젖은 베이지 트렌치코트, 빗방울 맺힌 웨이브 헤어</p>
+                </div>
+              </div>
+
+              <!-- 캐릭터 레퍼런스 이미지 첨부 박스 -->
+              <div class="char-ref-upload-box">
+                <div class="char-ref-header">
+                  <span>📸 캐릭터 자산 레퍼런스 이미지 첨부 (선택)</span>
+                  <span class="char-ref-badge">지브리 수채화 × 35mm 자동 반영</span>
+                </div>
+                <div class="char-ref-grid">
+                  <!-- 파트너 레퍼런스 업로드 -->
+                  <div class="char-ref-slot" id="partner-ref-slot">
+                    <label for="partner-ref-input" class="char-ref-label">
+                      <img id="partner-ref-thumb" class="char-ref-thumb hidden" alt="파트너 레퍼런스" />
+                      <div id="partner-ref-placeholder" class="char-ref-placeholder">
+                        <span style="font-size:1.15rem;">🖼️</span>
+                        <span>파트너 이미지 첨부</span>
+                        <small>이준 / 이서 외형 참고</small>
+                      </div>
+                    </label>
+                    <input type="file" id="partner-ref-input" accept="image/*" class="hidden" />
+                    <button type="button" id="btn-clear-partner-ref" class="char-ref-clear hidden" title="첨부 삭제">✕</button>
+                  </div>
+
+                  <!-- 주인공(플레이어) 레퍼런스 업로드 -->
+                  <div class="char-ref-slot" id="player-ref-slot">
+                    <label for="player-ref-input" class="char-ref-label">
+                      <img id="player-ref-thumb" class="char-ref-thumb hidden" alt="주인공 레퍼런스" />
+                      <div id="player-ref-placeholder" class="char-ref-placeholder">
+                        <span style="font-size:1.15rem;">👤</span>
+                        <span>내 캐릭터 이미지 첨부</span>
+                        <small>주인공 외형 참고</small>
+                      </div>
+                    </label>
+                    <input type="file" id="player-ref-input" accept="image/*" class="hidden" />
+                    <button type="button" id="btn-clear-player-ref" class="char-ref-clear hidden" title="첨부 삭제">✕</button>
+                  </div>
+                </div>
+
+                <div class="char-ref-actions">
+                  <input
+                    type="text"
+                    id="char-custom-note"
+                    class="char-custom-note-input"
+                    placeholder="추가 외형/분위기 메모 (예: 은테 안경, 잔잔한 미소, 단발머리)"
+                    maxlength="80"
+                  />
+                  <button type="button" id="btn-preview-char-asset" class="char-asset-gen-btn">
+                    ✨ 캐릭터 자산 인화
+                  </button>
+                </div>
+
+                <!-- 생성된 캐릭터 자산 시트 미리보기 -->
+                <div id="char-sheet-preview-box" class="char-sheet-preview-box hidden">
+                  <img id="char-sheet-preview-img" class="char-sheet-preview-img" alt="생성된 캐릭터 자산 시트" />
+                  <div class="char-sheet-preview-info">
+                    <div class="char-sheet-tag">✓ CHARACTER ASSET READY</div>
+                    <p id="char-sheet-summary-text">첨부된 레퍼런스 이미지가 캐릭터 자산과 5컷 콘티에 반영되었습니다.</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Step 2: Where are we right now? -->
+            <div>
+              <div class="director-step-title"><span>STEP 2</span> 지금 우리는 어디에 있나요? (Location)</div>
+              <div class="step-card-grid">
+                <div class="choice-chip chip-location selected" data-location="rainy_cafe">
+                  <h4>☕ 비 오는 밤, 마감 10분 전의 오래된 창가 카페</h4>
+                  <p>따뜻한 텅스텐 조명, 유리창을 타고 흐르는 빗방울, 식어가는 두 잔의 커피</p>
+                </div>
+                <div class="choice-chip chip-location" data-location="midnight_station">
+                  <h4>🌙 막차가 끊긴 새벽, 안개 낀 기차역 플랫폼 벤치</h4>
+                  <p>주황빛 나트륨 가로등, 젖은 플랫폼 벤치, 안개 너머로 뻗은 빈 철길</p>
+                </div>
+                <div class="choice-chip chip-location" data-location="red_darkroom">
+                  <h4>🎞️ 빗소리가 들리는 지하 아날로그 사진 암실</h4>
+                  <p>붉은 암실 안전등 빛, 집게에 걸려 마르는 흑백 사진들, 서정적인 침묵</p>
+                </div>
+              </div>
+            </div>
+
+            <!-- Step 3: What is the moment between us? -->
+            <div>
+              <div class="director-step-title"><span>STEP 3</span> 우리 사이의 순간은 무엇인가요? (Situation)</div>
+              <div class="step-card-grid">
+                <div class="choice-chip chip-situation selected" data-situation="parting_before_trip">
+                  <h4>✈️ 내일 아침 멀리 떠나는 사람과의 마지막 밤</h4>
+                  <p>출국 전 진심을 적은 엽서를 건네고 싶지만, 기다림에 얽매일까 두려워 망설임</p>
+                </div>
+                <div class="choice-chip chip-situation" data-situation="unspoken_first_love">
+                  <h4>☂️ 7년 지기 친구, 선을 넘기 직전의 고백</h4>
+                  <p>7년간 숨겨온 사진 엽서를 건네고 싶지만, 소중한 우정마저 잃을까 두려움</p>
+                </div>
+                <div class="choice-chip chip-situation" data-situation="reunion_after_years">
+                  <h4>💌 3년 만에 우연히 다시 마주친 옛 연인과의 밤</h4>
+                  <p>3년 동안 차마 부치지 못하고 간직한 흑백 인화 엽서를 건네고 싶은 재회</p>
+                </div>
+              </div>
+            </div>
+
+            <!-- Step 4: Initial Clue Focus -->
+            <div>
+              <div class="director-step-title"><span>STEP 4</span> 가장 먼저 시선이 머문 단서는? (Anchor Clue)</div>
+              <div class="step-card-grid" style="display: flex; flex-direction: row; gap: 6px;">
+                <div class="choice-chip chip-clue selected" data-clue="wet_sleeve" style="flex: 1; text-align: center;">
+                  <h4>💧 젖은 왼쪽 어깨</h4>
+                  <p>우산을 기울여준 흔적</p>
+                </div>
+                <div class="choice-chip chip-clue" data-clue="postcard" style="flex: 1; text-align: center;">
+                  <h4>📷 흑백 사진 엽서</h4>
+                  <p>만지작거리는 모서리</p>
+                </div>
+                <div class="choice-chip chip-clue" data-clue="itinerary" style="flex: 1; text-align: center;">
+                  <h4>🎫 출발 티켓/일정표</h4>
+                  <p>시간이 찍힌 티켓</p>
+                </div>
+              </div>
+            </div>
+
+            <button type="button" id="btn-start-story" class="primary-cta">
+              🎬 현장 스틸컷 & 프리퀄 인화하기
+            </button>
+          </div>
+        </div>
+
+        <!-- View 2: 3-Cut Prequel Video Roll -->
+        <div id="view-prequel" class="stage-view">
+          <video id="prequel-video" class="full-stage-video" playsinline></video>
+
+          <div class="prequel-top-bar">
+            <span id="prequel-cut-indicator" class="film-roll-tag">
+              THE PHOTOGRAPHER'S FILM ROLL • CUT 1/3
+            </span>
+            <button type="button" id="btn-skip-prequel" class="ghost-btn">
+              건너뛰기 (Skip) ⏩
+            </button>
+          </div>
+
+          <div class="prequel-subtitle-box">
+            <p id="prequel-sub-kr" class="sub-kr"></p>
+            <p id="prequel-sub-en" class="sub-en"></p>
+            <button type="button" id="btn-next-prequel" class="subtle-next-btn">
+              다음 장면 보기 (Next Cut) →
+            </button>
+          </div>
+        </div>
+
+        <!-- View 3: Dynamic Location Gameplay Scene -->
+        <div id="view-cafe" class="stage-view">
+          <div id="cafe-visual-backdrop" class="cafe-visual-scene">
+            <div class="scene-hud">
+              <span id="scene-time-pill" class="time-pill">🌧️ 마감 10분 전 (22:50)</span>
+              <span id="turn-indicator" class="turn-pill">TURN 1 / 2</span>
+            </div>
+
+            <!-- Escape-Room Style Heart Lock Status Badge -->
+            <div id="heart-lock-banner" class="heart-lock-banner locked">
+              <div class="heart-lock-header">
+                <span id="heart-lock-icon" class="heart-lock-icon">🔒</span>
+                <span id="heart-lock-title" class="heart-lock-title">망설임의 자물쇠 (Heart Lock)</span>
+                <span id="heart-lock-state-pill" class="heart-lock-state-pill">LOCKED</span>
+              </div>
+              <div id="heart-lock-desc" class="heart-lock-desc">
+                “내일 떠나는 내가 지금 고백하면, 너에게 기다려 달라는 부담이 될까 봐 두렵다.”
+              </div>
+            </div>
+
+            <div class="partner-stage-presence">
+              <div id="cafe-partner-name" class="partner-name-plate">이준 (Ijun)</div>
+              <div id="cafe-action-cue" class="partner-action-cue">
+                젖은 어깨를 가볍게 털며 테이블 맞은편에 조용히 앉는다.
+              </div>
+            </div>
+
+            <!-- Clue Inspection Overlay Card -->
+            <div id="clue-overlay-card" class="clue-overlay-card hidden">
+              <div class="clue-overlay-header">
+                <span id="clue-overlay-title">🔍 단서 확인</span>
+                <button type="button" id="btn-close-clue">✕</button>
+              </div>
+              <div id="itinerary-badge" class="itinerary-flight-badge hidden">
+                DEPARTURE: TOMORROW 09:30 AM
+              </div>
+              <div id="clue-overlay-desc" class="clue-overlay-desc"></div>
+            </div>
+
+            <div class="clues-tray">
+              <div class="clues-tray-label">눈앞의 단서 관찰하기 (2개 이상 관찰 시 [💡 단서 조합 추론] 활성화)</div>
+              <div class="clue-hotspots">
+                <button type="button" class="clue-chip" data-clue="wet_sleeve">💧 젖은 왼쪽 어깨</button>
+                <button type="button" class="clue-chip" data-clue="postcard">📷 흑백 사진 엽서</button>
+                <button type="button" class="clue-chip" data-clue="itinerary">🎫 출발 티켓/일정표</button>
+              </div>
+            </div>
+          </div>
+
+          <div class="dialogue-deck">
+            <!-- Player Clue Synthesis Button & Result Panel -->
+            <div class="clue-synthesis-bar">
+              <button
+                type="button"
+                id="btn-synthesize-clues"
+                class="synthesize-clues-btn hidden"
+              >
+                💡 단서 조합 추론하기 (Synthesize Clues • Argon High Reasoning)
+              </button>
+              <div id="synthesis-result-card" class="synthesis-result-card hidden">
+                <div id="synthesis-title" class="synthesis-title">🗝️ 마스터키 추론 완료</div>
+                <div id="synthesis-hypothesis" class="synthesis-hypothesis"></div>
+                <div id="synthesis-obstacle" class="synthesis-obstacle"></div>
+              </div>
+            </div>
+
+            <div class="dialogue-bubble">
+              <div class="dialogue-bubble-top">
+                <div id="dialogue-speaker" class="speaker-tag">이준</div>
+                <button
+                  type="button"
+                  id="btn-toggle-subtext"
+                  class="subtext-lens-btn hidden"
+                  title="gemini-4-argon이 추론한 배우의 내면 갈등(Goal vs Obstacle)과 속마음 지문을 확인합니다"
+                >
+                  🎭 속마음 지문 보기
+                </button>
+              </div>
+              <div id="dialogue-text-kr" class="dialogue-text-kr">
+                “비 많이 오네… 오늘은 조금 일찍 가봐야 할 것 같아.”
+              </div>
+              <!-- Visible Acting Subtext & Inner Conflict Drawer -->
+              <div id="acting-subtext-drawer" class="acting-subtext-drawer hidden">
+                <div class="subtext-row">
+                  <span class="subtext-tag">1. 단서/의도 인식</span>
+                  <p id="subtext-intent"></p>
+                </div>
+                <div class="subtext-row">
+                  <span class="subtext-tag">2. 내면 갈등 (Goal vs Obstacle)</span>
+                  <p id="subtext-conflict"></p>
+                </div>
+                <div class="subtext-row">
+                  <span class="subtext-tag">3. 배우 속마음 지문 (Subtext)</span>
+                  <p id="subtext-monologue" class="subtext-quote"></p>
+                </div>
+              </div>
+            </div>
+
+            <div id="preset-choices" class="preset-choices"></div>
+
+            <form id="dialogue-form" class="free-input-row">
+              <input
+                type="text"
+                id="player-input"
+                placeholder="직접 대사를 입력하거나 위 선택지를 클릭하세요..."
+                autocomplete="off"
+              />
+              <button type="submit" id="btn-send-turn" class="send-btn">전송</button>
+            </form>
+          </div>
+        </div>
+
+        <!-- View 4: THE KILLER WOW POINT — 3D Photo Postcard Flip -->
+        <div id="view-ending" class="stage-view">
+          <div class="ending-header">
+            <div id="ending-heart-unlock-pill" class="ending-heart-unlock-pill">
+              🔓 진심 해금 완료 (Confession Unlocked!)
+            </div>
+            <span id="ending-type-badge" class="ending-type-badge">FEELINGS_CONFIRMED</span>
+            <h2 id="ending-title-kr" class="ending-title">비 내리는 밤의 고백</h2>
+            <p id="ending-final-dialogue" class="ending-dialogue">
+              “이 사진 뒤에 쓴 말, 비행기 뜨기 전까진 읽지 말아줘.”
+            </p>
+          </div>
+
+          <div class="postcard-3d-scene">
+            <div id="postcard-3d-card" class="postcard-3d-card">
+              <!-- Front: Monochrome Silver Gelatin Photo Print -->
+              <div class="postcard-face postcard-front">
+                <div class="monochrome-photo-art">
+                  <span class="darkroom-stamp">ANALOGUE SILVER GELATIN PRINT • 35MM</span>
+                  <div class="umbrella-silhouette">☂️</div>
+                  <div class="front-caption">The First Rainy Day Archive</div>
+                </div>
+                <div class="flip-instruction">✦ 엽서를 클릭하여 뒷면의 친필 고백과 P.S.를 확인하세요 ✦</div>
+              </div>
+
+              <!-- Back: Handwritten Confession & Grounded P.S. Note -->
+              <div class="postcard-face postcard-back">
+                <div class="postcard-paper-header">
+                  <span id="postcard-from-label" class="post-from">FROM. 이준 (Ijun)</span>
+                  <span class="post-stamp">AIR MAIL<br />PAR AVION</span>
+                </div>
+                <div id="handwritten-body-kr" class="handwritten-body-kr">
+                  처음 우산을 나눴던 그날부터 내 렌즈는 너만 향하고 있었어.
+                </div>
+                <div id="handwritten-body-en" class="handwritten-body-en">
+                  From the first rainy day under the umbrella, my lens was always on you.
+                </div>
+                <div class="postcard-divider"></div>
+                <div id="handwritten-ps-kr" class="handwritten-ps-kr">
+                  P.S. 내 젖은 소매를 먼저 알아봐줘서 고마워.
+                </div>
+                <div id="handwritten-ps-en" class="handwritten-ps-en">
+                  P.S. Thank you for noticing my wet sleeve first.
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div style="display: flex; gap: 8px; width: 100%;">
+            <button type="button" id="btn-toggle-flip" class="primary-cta" style="flex: 1; padding: 11px;">
+              엽서 앞/뒷면 뒤집기 🔄
+            </button>
+            <button
+              type="button"
+              id="btn-ending-new-direct"
+              class="subtle-next-btn"
+              style="flex: 1; padding: 11px;"
+            >
+              + 다른 엔딩 디렉팅
+            </button>
+          </div>
+        </div>
+      </section>
+
+      <!-- Post-Ending Storyboard Darkroom Filmstrip Panel -->
+      <aside id="darkroom-panel" class="darkroom-panel hidden">
+        <div class="darkroom-header">
+          <div>
+            <div class="darkroom-eyebrow">5-CUT CINEMA VERITE DARKROOM</div>
+            <h3 style="font-size: 1.08rem; font-weight: 700;">5-Cut Short Drama MP4</h3>
+          </div>
+          <span id="pipeline-status-badge" class="pipeline-badge">PLANNING</span>
+        </div>
+
+        <div class="progress-bar-track">
+          <div id="pipeline-progress-fill" class="progress-bar-fill" style="width: 15%;"></div>
+        </div>
+        <div id="pipeline-detail-text" class="pipeline-detail-text">
+          gemini-4-argon 5-Cut 시네마 베리테 기획 중...
+        </div>
+
+        <!-- Multimodal Showrunner 3-Point Verification Checklist -->
+        <div id="showrunner-checklist-box" class="showrunner-checklist-box">
+          <div class="showrunner-checklist-header">
+            <span>🎬 AI 쇼러너 디렉터스 컷 멀티모달 검수기</span>
+            <span id="showrunner-score-badge" class="showrunner-score-badge">검수 대기</span>
+          </div>
+          <div id="showrunner-checklist-items" class="showrunner-checklist-items">
+            <div class="sr-check-item pending" data-check="cast_visual_continuity">
+              <span class="sr-check-mark">⏳</span>
+              <div>
+                <strong>Cast Visual Continuity</strong>
+                <p>Cut 1~5 캐릭터 외형 및 트렌치코트 복장 연속성 검수 대기</p>
+              </div>
+            </div>
+            <div class="sr-check-item pending" data-check="clue_and_deduction_grounding">
+              <span class="sr-check-mark">⏳</span>
+              <div>
+                <strong>Observed Clue & Deduction Grounding</strong>
+                <p>플레이어 관찰 단서(Cut 2) 및 추론 대사(Cut 3~4) 정합성 검수 대기</p>
+              </div>
+            </div>
+            <div class="sr-check-item pending" data-check="postcard_ps_alignment">
+              <span class="sr-check-mark">⏳</span>
+              <div>
+                <strong>Postcard P.S. Alignment</strong>
+                <p>Cut 5 뒤집힌 엽서 뒷면의 친필 고백 및 P.S. 추신 일치 검수 대기</p>
+              </div>
+            </div>
+          </div>
+          <div id="showrunner-patch-note" class="showrunner-patch-note">
+            gemini-4-argon (thinking_level="high") 멀티모달 검수 루프가 스토리보드 인화 직후 실행됩니다.
+          </div>
+        </div>
+
+        <div class="filmstrip-grid">
+          <div class="film-slot" data-cut="1">
+            <span>CUT 01</span>
+            <div class="slot-placeholder">Through-Glass</div>
+          </div>
+          <div class="film-slot" data-cut="2">
+            <span>CUT 02</span>
+            <div class="slot-placeholder">85mm Macro</div>
+          </div>
+          <div class="film-slot" data-cut="3">
+            <span>CUT 03</span>
+            <div class="slot-placeholder">50mm OTS</div>
+          </div>
+          <div class="film-slot" data-cut="4">
+            <span>CUT 04</span>
+            <div class="slot-placeholder">35mm Climax</div>
+          </div>
+          <div class="film-slot" data-cut="5">
+            <span>CUT 05</span>
+            <div class="slot-placeholder">90° Overhead</div>
+          </div>
+        </div>
+
+        <div class="video-result-box">
+          <video
+            id="compiled-video-player"
+            class="compiled-video"
+            controls
+            playsinline
+          ></video>
+          <div class="video-download-row">
+            <a
+              id="link-preview-mp4"
+              class="dl-btn disabled"
+              download="lovestory_preview.mp4"
+              target="_blank"
+            >
+              ⚡ 초고속 프리뷰 MP4
+            </a>
+            <a
+              id="link-master-mp4"
+              class="dl-btn master disabled"
+              download="lovestory_master.mp4"
+              target="_blank"
+            >
+              🎬 마스터 숏드라마 MP4
+            </a>
+          </div>
+        </div>
+      </aside>
+    </main>
+
+    <!-- Modal 1: "MY FILM VAULT (🎞️ 내 필름 보관함)" Gallery Modal -->
+    <div id="vault-modal" class="modal-backdrop hidden">
+      <div class="modal-window vault-modal-window">
+        <div class="modal-header">
+          <div style="display: flex; align-items: center; gap: 10px;">
+            <span style="font-size: 1.3rem;">🎞️</span>
+            <h2 style="font-size: 1.15rem; font-weight: 700;">
+              내 필름 보관함 (My Film Vault)
+            </h2>
+          </div>
+          <button type="button" id="btn-close-vault" class="close-modal-btn">✕</button>
+        </div>
+
+        <div class="modal-body">
+          <div class="vault-top-actions">
+            <p style="font-size: 0.82rem; color: var(--text-muted);">
+              플레이어님이 디렉팅한 모든 회차의 엔딩 MP4와 3D 친필 엽서가 보관됩니다. 카드를 선택해 다시 뒤집어 보거나 감상하세요.
+            </p>
+            <button
+              type="button"
+              id="btn-new-directing"
+              class="header-btn"
+              style="background: var(--gold-accent); color: #120e16;"
+            >
+              + 새로운 조건으로 다른 엔딩 디렉팅하기
+            </button>
+          </div>
+
+          <div id="vault-grid-container" class="vault-grid">
+            <!-- Dynamically populated -->
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Modal 2: Studio & Architecture (Judge Modal) -->
+    <div id="judge-modal" class="modal-backdrop hidden">
+      <div class="modal-window">
+        <div class="modal-header">
+          <div style="display: flex; align-items: center; gap: 10px;">
+            <span style="font-size: 1.3rem;">🎬</span>
+            <h2 style="font-size: 1.15rem; font-weight: 700;">
+              LoveStory; Studio & Architecture (v4.0 Complete Edition)
+            </h2>
+          </div>
+          <button type="button" id="btn-close-modal" class="close-modal-btn">✕</button>
+        </div>
+
+        <div class="modal-body">
+          <div class="arch-section">
+            <div style="display: flex; justify-content: space-between; align-items: baseline;">
+              <h3>1. 4-Step Director & Systematic 5-Cut AI Pipeline</h3>
+              <span
+                id="modal-snapshot-hash"
+                style="color: var(--gold-accent); font-family: monospace; font-size: 0.76rem;"
+              >
+                sha256: pending...
+              </span>
+            </div>
+            <p style="font-size: 0.82rem; color: var(--text-muted); margin-bottom: 10px;">
+              단일 Google Cloud Run 컨테이너(`FastAPI` + `FFmpeg`, `max-instances=1`, `no-cpu-throttling`)에서
+              4단계 다이나믹 디렉팅 온보딩, 실시간 인앱 스틸컷/프리퀄 생성(`gemini-nano-banana-2.1`),
+              5대 규칙 자율 검증 루프(`gemini-4-argon`), 1970s 시네마 베리테 영상화(`gemini-omni-1.1-flash`),
+              그리고 내 필름 보관함(`vault_index.json`)을 엔드투엔드로 구동합니다.
+            </p>
+
+            <div class="arch-diagram-wrapper">
+              <svg
+                class="arch-diagram-svg"
+                viewBox="0 0 900 210"
+                fill="none"
+                xmlns="http://www.w3.org/2000/svg"
+              >
+                <!-- 1. 4-Step Director -->
+                <rect x="10" y="30" width="135" height="150" rx="10" fill="#1b1725" stroke="#e2b679" stroke-width="1.5"/>
+                <text x="77" y="58" text-anchor="middle" fill="#e2b679" font-size="11" font-weight="bold">4-Step Director</text>
+                <text x="77" y="80" text-anchor="middle" fill="#f6f1e9" font-size="9.5">1. Cast Profile</text>
+                <text x="77" y="98" text-anchor="middle" fill="#f6f1e9" font-size="9.5">2. Location (3)</text>
+                <text x="77" y="116" text-anchor="middle" fill="#f6f1e9" font-size="9.5">3. Situation (3)</text>
+                <text x="77" y="134" text-anchor="middle" fill="#f6f1e9" font-size="9.5">4. Anchor Clue</text>
+                <text x="77" y="156" text-anchor="middle" fill="#7be0ad" font-size="9">In-App Setup & Prequel</text>
+
+                <line x1="145" y1="105" x2="185" y2="105" stroke="#e2b679" stroke-width="1.5"/>
+
+                <!-- 2. Lead Brain & Verification -->
+                <rect x="185" y="20" width="170" height="170" rx="10" fill="#1b1725" stroke="#7be0ad" stroke-width="1.5"/>
+                <text x="270" y="48" text-anchor="middle" fill="#7be0ad" font-size="12" font-weight="bold">gemini-4-argon</text>
+                <text x="270" y="70" text-anchor="middle" fill="#f6f1e9" font-size="10">2-Turn Acting (medium)</text>
+                <text x="270" y="90" text-anchor="middle" fill="#f6f1e9" font-size="10">3D Postcard & P.S. Writer</text>
+                <text x="270" y="110" text-anchor="middle" fill="#e2b679" font-size="10">5 Distinct Camera Angles</text>
+                <rect x="200" y="126" width="140" height="50" rx="6" fill="#0d0a14" stroke="#f07167" stroke-width="1"/>
+                <text x="270" y="144" text-anchor="middle" fill="#f07167" font-size="9" font-weight="bold">Verification Loop (high)</text>
+                <text x="270" y="160" text-anchor="middle" fill="#b3a99c" font-size="8">5 Strict Rules + 2 Retries</text>
+
+                <line x1="355" y1="105" x2="395" y2="105" stroke="#7be0ad" stroke-width="1.5"/>
+
+                <!-- 3. Storyboard & Instant Preview -->
+                <rect x="395" y="30" width="145" height="150" rx="10" fill="#1b1725" stroke="#e2b679" stroke-width="1.5"/>
+                <text x="467" y="58" text-anchor="middle" fill="#e2b679" font-size="11" font-weight="bold">nano-banana-2.1</text>
+                <text x="467" y="82" text-anchor="middle" fill="#f6f1e9" font-size="9.5">Ghibli Watercolor × 35mm</text>
+                <text x="467" y="102" text-anchor="middle" fill="#f6f1e9" font-size="9.5">Cut 5 90° Postcard Card</text>
+                <line x1="410" y1="118" x2="525" y2="118" stroke="rgba(255,255,255,0.1)"/>
+                <text x="467" y="138" text-anchor="middle" fill="#7be0ad" font-size="10" font-weight="bold">Local FFmpeg</text>
+                <text x="467" y="156" text-anchor="middle" fill="#b3a99c" font-size="9">⚡ Instant preview.mp4</text>
+
+                <line x1="540" y1="105" x2="580" y2="105" stroke="#e2b679" stroke-width="1.5"/>
+
+                <!-- 4. Omni Video Gen -->
+                <rect x="580" y="30" width="150" height="150" rx="10" fill="#1b1725" stroke="#7be0ad" stroke-width="1.5"/>
+                <text x="655" y="58" text-anchor="middle" fill="#7be0ad" font-size="11" font-weight="bold">omni-1.1-flash</text>
+                <text x="655" y="82" text-anchor="middle" fill="#f6f1e9" font-size="9.5">1970s Cinema Verite</text>
+                <text x="655" y="102" text-anchor="middle" fill="#f6f1e9" font-size="9.5">Documentary Formula</text>
+                <text x="655" y="122" text-anchor="middle" fill="#b3a99c" font-size="9">Cut 4 Climax (5s)</text>
+                <text x="655" y="140" text-anchor="middle" fill="#b3a99c" font-size="9">Cut 3 Dialogue (6s)</text>
+                <text x="655" y="158" text-anchor="middle" fill="#e2b679" font-size="8.5">background=True</text>
+
+                <line x1="730" y1="105" x2="765" y2="105" stroke="#7be0ad" stroke-width="1.5"/>
+
+                <!-- 5. Concat & Vault Archive -->
+                <rect x="765" y="30" width="125" height="150" rx="10" fill="#1b1725" stroke="#e2b679" stroke-width="1.5"/>
+                <text x="827" y="58" text-anchor="middle" fill="#e2b679" font-size="11" font-weight="bold">Local FFmpeg</text>
+                <text x="827" y="80" text-anchor="middle" fill="#7be0ad" font-size="10" font-weight="bold">🎬 master.mp4</text>
+                <line x1="775" y1="98" x2="880" y2="98" stroke="rgba(255,255,255,0.1)"/>
+                <text x="827" y="120" text-anchor="middle" fill="#e2b679" font-size="10" font-weight="bold">My Film Vault</text>
+                <text x="827" y="138" text-anchor="middle" fill="#f6f1e9" font-size="9">🎞️ Multi-Ending Archive</text>
+                <text x="827" y="156" text-anchor="middle" fill="#b3a99c" font-size="8">vault_index.json</text>
+              </svg>
+            </div>
+          </div>
+
+          <div class="arch-section">
+            <h3>2. Autonomous Continuity Verification Loop Logs (`_validate_five_cut_plan`)</h3>
+            <p style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 8px;">
+              1) `schema_valid` (5 Cuts JSON) • 2) `cast_profile_enforced` (`GLOBAL_STYLE_SUFFIX` & Cast Lock) •
+              3) `clue_grounding_valid` (Zero un-clicked clues in Cut 2) • 4) `duration_bounds_valid` (3~10s) •
+              5) `cinema_verite_and_angles_valid` (5 distinct camera angles + `1970s cinema verite documentary style...` formula).
+            </p>
+            <div id="verification-logs-container" class="verif-box">
+              <div class="verif-entry">
+                <div>
+                  <strong>대기 중...</strong> 4단계 디렉팅 후 2턴 대화가 종료되면 실시간 자율 검증 로그가 이곳에 표시됩니다.
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Client Script -->
+    <script src="/app.js"></script>
+  </body>
+</html>

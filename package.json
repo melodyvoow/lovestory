@@ -1,0 +1,11 @@
+{
+  "name": "lovestory",
+  "version": "1.0.0",
+  "description": "LoveStory; — Choose the moment of love. The story doesn’t end here.",
+  "type": "module",
+  "scripts": {
+    "start": "python3 -m uvicorn main:app --host 0.0.0.0 --port ${PORT:-8080}",
+    "dev": "python3 -m uvicorn main:app --host 0.0.0.0 --port 8080 --reload",
+    "prequel": "python3 generate_prequel.py"
+  }
+}
